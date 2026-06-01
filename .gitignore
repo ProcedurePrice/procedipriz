@@ -1,5 +1,8 @@
 .DS_Store
 
+# PDFs (keep in data/raw_pdfs/ only)
+/*.pdf
+
 # Go
 /backend/bin/
 

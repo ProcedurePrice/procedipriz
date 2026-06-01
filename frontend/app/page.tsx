@@ -1,7 +1,7 @@
 "use client";
 
 import { Calculator } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Autocomplete, type ProcedureOption } from "@/components/ui/autocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,15 @@ const money = new Intl.NumberFormat("pt-BR", {
 export default function Home() {
   const [procedureOptions, setProcedureOptions] = useState<ProcedureOption[]>([]);
   const [selectedProcedure, setSelectedProcedure] = useState<ProcedureOption | null>(null);
+  const [porte, setPorte] = useState("");
   const [auxiliariesCount, setAuxiliariesCount] = useState(1);
   const [requiresAnesthesia, setRequiresAnesthesia] = useState(true);
   const [calculation, setCalculation] = useState<Calculation | null>(null);
+
+  // Sync porte with selected procedure
+  useEffect(() => {
+    setPorte(selectedProcedure?.porte ?? "");
+  }, [selectedProcedure]);
 
   const canCalculate = useMemo(() => selectedProcedure !== null, [selectedProcedure]);
 
@@ -86,7 +92,7 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-sm font-medium">Porte do procedimento</span>
-                <Input value={selectedProcedure?.porte ?? ""} readOnly />
+                <Input value={porte} onChange={(event) => setPorte(event.target.value)} />
               </label>
 
               <label className="space-y-2">

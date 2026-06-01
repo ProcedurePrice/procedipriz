@@ -19,19 +19,76 @@ type AutocompleteProps = {
   onSearch?: (query: string) => void;
 };
 
-export function Autocomplete({ label, options, value, onChange, onSearch }: AutocompleteProps) {
-  const [query, setQuery] = useState(value?.procedure_name ?? "");
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ç/g, "c")
+    .replace(/Ç/g, "c")
+    .trim()
+    .toLowerCase();
+}
 
-  const matches = useMemo(() => {
-    const normalized = normalizeSearch(query);
-    if (normalized.length < 2) {
-      return options;
+function scoreMatch(query: string, text: string): number {
+  const normalized = normalizeSearch(text);
+  const normalizedQuery = normalizeSearch(query);
+
+  if (!normalizedQuery) return 0;
+
+  // Exact substring match at start gets highest score
+  if (normalized.startsWith(normalizedQuery)) return 100;
+
+  // Substring match gets high score
+  const substringIndex = normalized.indexOf(normalizedQuery);
+  if (substringIndex !== -1) return 50 - substringIndex * 0.1;
+
+  // Word-by-word matching
+  const queryWords = normalizedQuery.split(/\s+/);
+  const textWords = normalized.split(/\s+/);
+  let matchedWords = 0;
+
+  for (const qWord of queryWords) {
+    if (textWords.some((tWord) => tWord.includes(qWord))) {
+      matchedWords++;
     }
+  }
 
-    return options.filter((option) =>
-      normalizeSearch(`${option.procedure_name} ${option.cbhpm_code} ${option.description}`).includes(normalized),
-    );
+  return matchedWords > 0 ? (matchedWords / queryWords.length) * 30 : 0;
+}
+
+export function Autocomplete({ label, options, value, onChange, onSearch }: AutocompleteProps) {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const filteredAndSorted = useMemo(() => {
+    if (!query.trim()) return options;
+
+    const scored = options.map((option) => {
+      const procedureScore = scoreMatch(query, option.procedure_name);
+      const descriptionScore = scoreMatch(query, option.description);
+      const codeScore = scoreMatch(query, option.cbhpm_code);
+      const maxScore = Math.max(procedureScore, descriptionScore, codeScore);
+
+      return { option, score: maxScore };
+    });
+
+    return scored
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ option }) => option);
   }, [options, query]);
+
+  const handleSearch = (text: string) => {
+    setQuery(text);
+    setIsOpen(true);
+    onSearch?.(text);
+  };
+
+  const handleSelect = (option: ProcedureOption) => {
+    onChange(option);
+    setQuery(option.procedure_name);
+    setIsOpen(false);
+  };
 
   return (
     <div className="space-y-2">
@@ -44,38 +101,28 @@ export function Autocomplete({ label, options, value, onChange, onSearch }: Auto
           className="pl-10"
           id="procedure-search"
           value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            onSearch?.(event.target.value);
-          }}
+          onChange={(event) => handleSearch(event.target.value)}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Digite para buscar..."
         />
       </div>
-      <div className="max-h-72 overflow-auto rounded-md border border-border bg-white">
-        {matches.map((option) => (
-          <button
-            className="block w-full border-b border-border px-4 py-3 text-left text-sm last:border-b-0 hover:bg-muted"
-            key={option.cbhpm_code}
-            type="button"
-            onClick={() => {
-              onChange(option);
-              setQuery(option.procedure_name);
-            }}
-          >
-            <span className="block font-medium">{option.procedure_name}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">
-              {option.cbhpm_code} | {option.description}
-            </span>
-          </button>
-        ))}
-      </div>
+      {isOpen && filteredAndSorted.length > 0 && (
+        <div className="max-h-72 overflow-auto rounded-md border border-border bg-white">
+          {filteredAndSorted.map((option, index) => (
+            <button
+              className="block w-full border-b border-border px-4 py-3 text-left text-sm last:border-b-0 hover:bg-muted"
+              key={`${option.cbhpm_code}-${option.description}-${index}`}
+              type="button"
+              onClick={() => handleSelect(option)}
+            >
+              <span className="block font-medium">{option.procedure_name}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {option.cbhpm_code} | {option.description}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
-
-function normalizeSearch(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
 }

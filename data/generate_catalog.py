@@ -163,9 +163,19 @@ def parse_catalog(text: str):
 
 def main():
     catalog = parse_catalog(pdf_text(SBN_PDF))
+    
+    # Deduplicate based on cbhpm_code and description
+    seen = set()
+    deduplicated = []
+    for item in catalog:
+        key = (item["cbhpm_code"], item["description"])
+        if key not in seen:
+            seen.add(key)
+            deduplicated.append(item)
+    
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_JSON.write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Generated {len(catalog)} procedure-code entries at {OUTPUT_JSON}")
+    OUTPUT_JSON.write_text(json.dumps(deduplicated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Generated {len(deduplicated)} unique procedure-code entries (removed {len(catalog) - len(deduplicated)} duplicates) at {OUTPUT_JSON}")
 
 
 if __name__ == "__main__":
