@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"procedureprice/backend/internal/generated"
+	"procediprize/backend/internal/generated"
 )
 
 //go:embed procedures.json

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"procedureprice/backend/internal/handlers"
+	"procediprize/backend/internal/handlers"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func main() {
 		addr = ":" + port
 	}
 
-	log.Printf("procedureprice api listening on %s", addr)
+	log.Printf("procediprize api listening on %s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}

@@ -71,7 +71,7 @@ export default function Home() {
       <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-5 py-8">
         <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-normal">ProcedurePrice</h1>
+            <h1 className="text-2xl font-semibold tracking-normal">ProcediPriz</h1>
             <p className="mt-1 text-sm text-muted-foreground">Cálculo rápido de honorários neurocirúrgicos</p>
           </div>
           <div className="flex size-11 items-center justify-center rounded-md bg-primary text-white">
@@ -135,7 +135,7 @@ export default function Home() {
           </section>
         </div>
       </section>
-      <footer className="border-t border-border px-5 py-4 text-center text-sm text-muted-foreground">Made by LabF5</footer>
+      <footer className="border-t border-border px-5 py-4 text-center text-sm text-muted-foreground">2026  LabF5  Todos os direitos reservados</footer>
     </main>
   );
 }

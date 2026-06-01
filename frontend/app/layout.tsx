@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ProcedurePrice",
+  title: "ProcediPriz",
   description: "Calculadora de honorários médicos para neurocirurgia.",
 };
 

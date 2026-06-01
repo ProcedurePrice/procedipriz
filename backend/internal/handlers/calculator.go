@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"procedureprice/backend/internal/generated"
+	"procediprize/backend/internal/generated"
 )
 
 const anesthesiaPorteValue = 1200.00

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: ProcedurePrice API
+  title: ProcediPriz API
   version: 1.0.0
   description: Core API for calculating medical procedure prices based on SBN and CBHPM catalogs.
 servers:

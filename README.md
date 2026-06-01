@@ -1,6 +1,6 @@
-# ProcedurePrice
+# ProcediPriz
 
-**ProcedurePrice** is a high-performance engineering solution strictly designed to solve one of the biggest operational bottlenecks in the medical billing routine of neurosurgeons: the agile, precise, and deterministic reconciliation of fees. The platform cross-references the specialty catalog of the SBN (Sociedade Brasileira de Neurocirurgia) with the guidelines and valuation tables of the CBHPM (Classificação Brasileira Hierarquizada de Procedimentos Médicos) catalog.
+**ProcediPriz** is a high-performance engineering solution strictly designed to solve one of the biggest operational bottlenecks in the medical billing routine of neurosurgeons: the agile, precise, and deterministic reconciliation of fees. The platform cross-references the specialty catalog of the SBN (Sociedade Brasileira de Neurocirurgia) with the guidelines and valuation tables of the CBHPM (Classificação Brasileira Hierarquizada de Procedimentos Médicos) catalog.
 
 The entire application was architected under the **Spec-Driven Design (SDD)** philosophy, where API contracts and static models precede implementation, mitigating errors, eliminating the risk of medical billing rejections, and ensuring absolute mathematical compliance.
 
@@ -23,7 +23,7 @@ The ecosystem adopts a **Monorepo** approach, unifying the presentation and comp
 The monorepo topology is structured up to the third level of depth to ensure a strict segregation of responsibilities:
 
 ```text
-procedure-price/
+procedi-priz/
 ├── .devcontainer/
 │   ├── devcontainer.json
 │   └── Dockerfile
