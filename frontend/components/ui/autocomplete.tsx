@@ -90,7 +90,7 @@ export function Autocomplete({ label, options, value, onChange, onSearch }: Auto
   return (
     <div className="space-y-2">
       <label
-        className="block text-xs font-semibold uppercase tracking-[0.4px] text-slate-500"
+        className="block text-xs font-semibold uppercase tracking-[0.4px] text-slate-500 dark:text-slate-400"
         htmlFor="procedure-search"
       >
         {label}
@@ -98,7 +98,7 @@ export function Autocomplete({ label, options, value, onChange, onSearch }: Auto
       <div className="relative">
         <Search
           aria-hidden="true"
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
           size={18}
         />
         <Input
@@ -111,15 +111,15 @@ export function Autocomplete({ label, options, value, onChange, onSearch }: Auto
         />
       </div>
       {isOpen && filteredAndSorted.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.10)", maxHeight: "288px", overflowY: "auto" }}>
           {filteredAndSorted.map((option, index) => {
             const isSelected = value?.cbhpm_code === option.cbhpm_code;
             return (
               <button
                 className={cn(
-                  "block w-full border-b border-slate-50 px-4 py-3 text-left text-sm last:border-b-0 transition-colors",
-                  isSelected ? "bg-teal-50" : "hover:bg-slate-50",
+                  "block w-full border-b border-slate-50 dark:border-slate-800 px-4 py-3 text-left text-sm last:border-b-0 transition-colors",
+                  isSelected ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800",
                 )}
                 key={`${option.cbhpm_code}-${option.description}-${index}`}
                 type="button"
@@ -127,8 +127,8 @@ export function Autocomplete({ label, options, value, onChange, onSearch }: Auto
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="block font-semibold text-slate-950">{option.procedure_name}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">
+                    <span className="block font-semibold text-slate-950 dark:text-slate-50">{option.procedure_name}</span>
+                    <span className="mt-0.5 block text-xs text-slate-400 dark:text-slate-500">
                       {option.cbhpm_code} | {option.description}
                     </span>
                   </div>

@@ -5,6 +5,39 @@
 @tailwind utilities;
 
 :root {
+  /* Light mode */
+  --background: 210 25% 98%;
+  --foreground: 220 18% 14%;
+  --primary: 186 72% 28%;
+  --muted: 210 18% 92%;
+  --muted-foreground: 215 12% 42%;
+  --border: 214 18% 84%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode */
+    --background: 217 33% 8%;
+    --foreground: 210 40% 98%;
+    --primary: 186 72% 50%;
+    --muted: 217 33% 15%;
+    --muted-foreground: 215 13% 67%;
+    --border: 217 33% 20%;
+  }
+}
+
+html.dark {
+  /* Dark mode */
+  --background: 217 33% 8%;
+  --foreground: 210 40% 98%;
+  --primary: 186 72% 50%;
+  --muted: 217 33% 15%;
+  --muted-foreground: 215 13% 67%;
+  --border: 217 33% 20%;
+}
+
+html.light {
+  /* Light mode */
   --background: 210 25% 98%;
   --foreground: 220 18% 14%;
   --primary: 186 72% 28%;
@@ -23,12 +56,24 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @layer utilities {
   .hex-bg {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64'%3E%3Cpath d='M28 0l28 16v32L28 64 0 48V16z' fill='none' stroke='%230d9488' stroke-opacity='0.045' stroke-width='1'/%3E%3C/svg%3E");
     background-size: 56px 64px;
+    transition: all 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .hex-bg {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64'%3E%3Cpath d='M28 0l28 16v32L28 64 0 48V16z' fill='none' stroke='%230d9488' stroke-opacity='0.12' stroke-width='1'/%3E%3C/svg%3E");
+    }
+  }
+
+  html.dark .hex-bg {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64'%3E%3Cpath d='M28 0l28 16v32L28 64 0 48V16z' fill='none' stroke='%230d9488' stroke-opacity='0.12' stroke-width='1'/%3E%3C/svg%3E");
   }
 
   .nav-pill {
@@ -37,23 +82,85 @@ body {
     background: rgba(255, 255, 255, 0.82);
     border: 1px solid rgba(255, 255, 255, 0.6);
     box-shadow: 0 4px 24px rgba(13, 148, 136, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-pill {
+      background: rgba(30, 41, 59, 0.82);
+      border: 1px solid rgba(71, 85, 105, 0.3);
+      box-shadow: 0 4px 24px rgba(13, 148, 136, 0.1), 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  html.dark .nav-pill {
+    background: rgba(30, 41, 59, 0.82);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    box-shadow: 0 4px 24px rgba(13, 148, 136, 0.1), 0 1px 4px rgba(0, 0, 0, 0.2);
   }
 
   .card-plush {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(0, 0, 0, 0.08),
       0 2px 8px rgba(13, 148, 136, 0.06);
+    transition: all 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .card-plush {
+      background: hsl(217 33% 15% / 1);
+      border-color: rgba(71, 85, 105, 0.3);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.4),
+        0 2px 8px rgba(13, 148, 136, 0.1);
+    }
+  }
+
+  html.dark .card-plush {
+    background: hsl(217 33% 15% / 1);
+    border-color: rgba(71, 85, 105, 0.3);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(13, 148, 136, 0.1);
   }
 
   .results-card {
     background: linear-gradient(160deg, #ffffff 0%, #f0fdfc 60%, #e6faf8 100%);
     box-shadow: 0 4px 6px rgba(13, 148, 136, 0.04), 0 12px 40px rgba(13, 148, 136, 0.1),
       0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .results-card {
+      background: linear-gradient(160deg, hsl(217 33% 17%) 0%, hsl(186 72% 22%) 60%, hsl(186 72% 18%) 100%);
+      box-shadow: 0 4px 6px rgba(13, 148, 136, 0.1), 0 12px 40px rgba(13, 148, 136, 0.15),
+        0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  html.dark .results-card {
+    background: linear-gradient(160deg, hsl(217 33% 17%) 0%, hsl(186 72% 22%) 60%, hsl(186 72% 18%) 100%);
+    box-shadow: 0 4px 6px rgba(13, 148, 136, 0.1), 0 12px 40px rgba(13, 148, 136, 0.15),
+      0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
   .badge-clinical {
     background: linear-gradient(135deg, #f0fdfc, #e6faf8);
     border: 1px solid rgba(13, 148, 136, 0.2);
     color: hsl(186, 72%, 24%);
+    transition: all 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .badge-clinical {
+      background: linear-gradient(135deg, hsl(186 72% 30%), hsl(186 72% 25%));
+      border: 1px solid rgba(13, 148, 136, 0.4);
+      color: hsl(186, 72%, 70%);
+    }
+  }
+
+  html.dark .badge-clinical {
+    background: linear-gradient(135deg, hsl(186 72% 30%), hsl(186 72% 25%));
+    border: 1px solid rgba(13, 148, 136, 0.4);
+    color: hsl(186, 72%, 70%);
   }
 
   .leader {
@@ -61,6 +168,17 @@ body {
     border-bottom: 2px dotted #cbd5e1;
     margin: 0 6px;
     margin-bottom: 4px;
+    transition: border-color 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .leader {
+      border-bottom-color: rgba(71, 85, 105, 0.5);
+    }
+  }
+
+  html.dark .leader {
+    border-bottom-color: rgba(71, 85, 105, 0.5);
   }
 
   .btn-calculate {

@@ -5,7 +5,6 @@ import {
   Calculator,
   HeartPulse,
   Info,
-  ShieldCheck,
   Stethoscope,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -98,27 +97,23 @@ export default function Home() {
               <Activity aria-hidden="true" className="text-white" size={18} />
             </div>
             <div>
-              <span className="block text-base font-extrabold tracking-tight text-slate-950">
+              <span className="block text-base font-extrabold tracking-tight text-slate-950 dark:text-slate-50">
                 ProcediPriz
               </span>
-              <span className="block text-[10px] font-medium tracking-[0.3px] text-slate-500 leading-none">
+              <span className="block text-[10px] font-medium tracking-[0.3px] text-slate-500 dark:text-slate-400 leading-none">
                 NEUROCIRURGIA
               </span>
             </div>
-          </div>
-          <div className="badge-clinical flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold">
-            <ShieldCheck aria-hidden="true" size={14} />
-            Portal Clínico
           </div>
         </nav>
       </div>
 
       {/* Hero */}
       <div className="relative z-[1] px-5 pb-6 pt-8 text-center">
-        <h1 className="m-0 mb-1.5 text-[30px] font-extrabold tracking-tight text-slate-950">
+        <h1 className="m-0 mb-1.5 text-[30px] font-extrabold tracking-tight text-slate-950 dark:text-slate-50">
           Cálculo de Honorários
         </h1>
-        <p className="m-0 text-sm font-medium text-slate-500">
+        <p className="m-0 text-sm font-medium text-slate-500 dark:text-slate-400">
           Baseado na tabela CBHPM · Resultados instantâneos
         </p>
       </div>
@@ -130,11 +125,11 @@ export default function Home() {
       >
         {/* Left panel */}
         <div
-          className="card-plush rounded-3xl border border-slate-200/80 bg-white p-8"
+          className="card-plush rounded-3xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 p-8"
         >
           <div className="mb-6 flex items-center gap-2">
             <Stethoscope aria-hidden="true" size={18} style={{ color: "hsl(186,72%,28%)" }} />
-            <h2 className="m-0 text-[15px] font-bold text-slate-950">
+            <h2 className="m-0 text-[15px] font-bold text-slate-950 dark:text-slate-50">
               Configuração do Procedimento
             </h2>
           </div>
@@ -159,7 +154,7 @@ export default function Home() {
               <Input value={porte} onChange={(e) => setPorte(e.target.value)} />
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.4px] text-slate-500">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.4px] text-slate-500 dark:text-slate-400">
                 Número de Auxiliares
               </label>
               <Input
@@ -188,8 +183,8 @@ export default function Home() {
                 <HeartPulse aria-hidden="true" size={16} style={{ color: "hsl(186,72%,28%)" }} />
               </div>
               <div>
-                <div className="text-[13px] font-semibold text-slate-950">Anestesiologista</div>
-                <div className="text-[11px] text-slate-500">Incluir honorários do anestesista</div>
+                <div className="text-[13px] font-semibold text-slate-950 dark:text-slate-50">Anestesiologista</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Incluir honorários do anestesista</div>
               </div>
             </div>
             <Toggle checked={requiresAnesthesia} onChange={setRequiresAnesthesia} />
@@ -216,7 +211,7 @@ export default function Home() {
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Calculator aria-hidden="true" size={18} style={{ color: "hsl(186,72%,28%)" }} />
-              <h2 className="m-0 text-[15px] font-bold text-slate-950">Resultado</h2>
+              <h2 className="m-0 text-[15px] font-bold text-slate-950 dark:text-slate-50">Resultado</h2>
             </div>
             <span
               className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -227,7 +222,7 @@ export default function Home() {
           </div>
 
           {/* Line items */}
-          <dl className="space-y-3.5">
+          <dl className="space-y-3.5 dark:text-slate-200">
             <ResultRow label="Cirurgião principal" value={calculation?.lead_surgeon_fee} />
             <ResultRow
               label={`Auxiliares${auxiliariesCount > 1 ? ` (×${auxiliariesCount})` : ""}`}
@@ -265,9 +260,9 @@ export default function Home() {
           </div>
 
           {/* Disclaimer */}
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-            <Info aria-hidden="true" className="mt-px shrink-0 text-slate-400" size={15} />
-            <p className="m-0 text-[11px] font-medium leading-relaxed text-slate-400">
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-3">
+            <Info aria-hidden="true" className="mt-px shrink-0 text-slate-400 dark:text-slate-500" size={15} />
+            <p className="m-0 text-[11px] font-medium leading-relaxed text-slate-400 dark:text-slate-500">
               Valores calculados conforme Tabela CBHPM 2025/2026. Sujeito à variação por convênio.
             </p>
           </div>
@@ -280,7 +275,7 @@ export default function Home() {
           className="mb-3.5 h-px"
           style={{ background: "linear-gradient(90deg, transparent, #cbd5e1, transparent)" }}
         />
-        <p className="m-0 text-xs font-medium text-slate-400">
+        <p className="m-0 text-xs font-medium text-slate-400 dark:text-slate-500">
           2026 &nbsp;·&nbsp;{" "}
           <span className="font-bold text-slate-500">LabF5</span>
           &nbsp;·&nbsp; Todos os direitos reservados
@@ -299,9 +294,9 @@ function ResultRow({
 }) {
   return (
     <div className="flex items-end justify-between gap-1">
-      <dt className="shrink-0 text-[13px] font-medium text-slate-500">{label}</dt>
+      <dt className="shrink-0 text-[13px] font-medium text-slate-500 dark:text-slate-400">{label}</dt>
       <div className="leader" />
-      <dd className="font-grotesk shrink-0 text-sm font-semibold text-slate-950">
+      <dd className="font-grotesk shrink-0 text-sm font-semibold text-slate-950 dark:text-slate-50">
         {value === undefined ? "—" : money.format(value)}
       </dd>
     </div>

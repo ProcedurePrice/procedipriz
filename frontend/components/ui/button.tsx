@@ -6,7 +6,7 @@ export function Button({ className, disabled, children, ...props }: React.Button
     <button
       disabled={disabled}
       className={cn(
-        "btn-calculate inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold tracking-wide text-white",
+        "btn-calculate inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold tracking-wide text-white dark:text-white",
         className,
       )}
       type="button"
