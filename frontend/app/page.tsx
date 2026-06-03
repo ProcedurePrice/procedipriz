@@ -37,10 +37,24 @@ export default function Home() {
   const [auxiliariesCount, setAuxiliariesCount] = useState(1);
   const [requiresAnesthesia, setRequiresAnesthesia] = useState(true);
   const [calculation, setCalculation] = useState<Calculation | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setPorte(selectedProcedure?.porte ?? "");
   }, [selectedProcedure]);
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setProcedureOptions([]);
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      searchProcedures(searchQuery);
+    }, 300);
+  
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const canCalculate = useMemo(() => selectedProcedure !== null, [selectedProcedure]);
 
@@ -160,7 +174,7 @@ export default function Home() {
               options={procedureOptions}
               value={selectedProcedure}
               onChange={setSelectedProcedure}
-              onSearch={searchProcedures}
+              onSearch={setSearchQuery}
             />
           </div>
 
