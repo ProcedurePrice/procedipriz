@@ -5,6 +5,8 @@
 
 # Go
 /backend/bin/
+/backend/db/schema.sql
+/backend/.env
 
 # Next.js
 /frontend/.next/
