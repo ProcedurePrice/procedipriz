@@ -197,11 +197,7 @@ function ShareContent() {
           </div>
         </div>
 
-        <div className="mt-5 flex gap-3">
-          <Button className="w-full" onClick={() => router.push("/")}>
-            <ArrowLeft size={16} /> Criar Novo Cálculo
-          </Button>
-        </div>
+
       </div>
     </div>
   );
