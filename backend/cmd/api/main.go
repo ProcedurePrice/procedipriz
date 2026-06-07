@@ -17,7 +17,7 @@ func main() {
 		addr = ":" + port
 	}
 
-	log.Printf("procediprize api listening on %s", addr)
+	log.Printf("ProcediPriz API is listening on %s 🚀", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}
