@@ -1,10 +1,11 @@
 openapi: 3.0.3
 info:
   title: Afere API
-  version: 2.0.0
+  version: 3.0.0
   description: >
     Composition-builder API for the Afere medical procedure valuation platform.
-    Implements the correct SBN → N CBHPM domain model.
+    Implements CBHPM 2022 items 4.1, 4.2, and 5.1 for correct multi-procedure
+    discounting and auxiliary surgeon remuneration.
 
 servers:
   - url: http://localhost:8080
@@ -55,7 +56,8 @@ paths:
       summary: Get SBN procedure with its CBHPM codes
       description: >
         Returns the full procedure package: name plus all suggested CBHPM codes
-        with their default porte from the SBN mapping.
+        with their default porte from the SBN mapping. The porte is read-only;
+        the physician selects which codes were performed but cannot change the porte.
       operationId: getProcedureByID
       parameters:
         - name: id
@@ -66,7 +68,7 @@ paths:
           description: SBN procedure ID.
       responses:
         '200':
-          description: Procedure detail with suggested CBHPM codes.
+          description: Procedure detail with associated CBHPM codes.
           content:
             application/json:
               schema:
@@ -78,9 +80,10 @@ paths:
     post:
       summary: Calculate total valuation for a composition
       description: >
-        Accepts a physician-assembled composition of CBHPM codes (each with a
-        chosen porte) plus staffing configuration, and returns a per-code
-        breakdown and final total.
+        Accepts a physician-assembled composition of CBHPM codes plus staffing
+        configuration and access route type, then returns a detailed breakdown
+        implementing CBHPM 2022 items 4.1/4.2 (multi-procedure discounting) and
+        item 5.1 (auxiliary surgeon remuneration at 60/40/30/30%).
       operationId: calculate
       requestBody:
         required: true
@@ -131,11 +134,11 @@ components:
           description: CBHPM description from the SBN mapping.
         porte:
           type: string
-          description: Default porte from the SBN mapping (e.g. "2B").
+          description: Porte for this code as defined in the SBN catalog (e.g. "7A"). Read-only.
         num_auxiliaries:
           type: integer
           minimum: 0
-          description: Maximum number of auxiliary surgeons allowed per CBHPM (0–3).
+          description: Maximum number of auxiliary surgeons allowed per CBHPM (0–4).
 
     ProcedureDetail:
       type: object
@@ -150,6 +153,14 @@ components:
           items:
             $ref: '#/components/schemas/CBHPMCodeEntry'
 
+    AccessRouteType:
+      type: string
+      enum: [same, different]
+      description: >
+        Whether all selected procedures were performed via the same access route
+        (CBHPM 4.1 – 50% discount on secondary procedures) or different access
+        routes (CBHPM 4.2 – 70% discount on secondary procedures).
+
     SelectedCode:
       type: object
       required: [cbhpm_code, description, porte]
@@ -162,30 +173,32 @@ components:
           description: CBHPM description (passed through from the procedure detail).
         porte:
           type: string
-          description: Porte chosen by the physician (may differ from the SBN default).
+          description: Porte for this code (from the SBN catalog, not editable by the physician).
 
     CalculateRequest:
       type: object
-      required: [selected_codes, auxiliaries_count, requires_anesthesia]
+      required: [selected_codes, auxiliaries_count, requires_anesthesia, access_route_type]
       properties:
         selected_codes:
           type: array
           minItems: 1
           items:
             $ref: '#/components/schemas/SelectedCode'
-          description: Physician-selected CBHPM codes with their chosen portes.
+          description: Physician-selected CBHPM codes.
         auxiliaries_count:
           type: integer
           minimum: 0
-          maximum: 3
-          description: Number of auxiliary surgeons (0–3).
+          maximum: 4
+          description: Number of auxiliary surgeons (0–4).
         requires_anesthesia:
           type: boolean
           description: Whether an anesthesiologist is required.
+        access_route_type:
+          $ref: '#/components/schemas/AccessRouteType'
 
     CodeBreakdown:
       type: object
-      required: [cbhpm_code, description, porte, base_value]
+      required: [cbhpm_code, description, porte, base_value, is_principal]
       properties:
         cbhpm_code:
           type: string
@@ -196,35 +209,87 @@ components:
         base_value:
           type: number
           format: float
-          description: Monetary value of this code's porte.
+          description: Full monetary value of this code's porte (before any discount).
+        is_principal:
+          type: boolean
+          description: True for the highest-value code selected as the principal procedure.
+
+    AuxiliaryFee:
+      type: object
+      required: [position, percentage, fee]
+      properties:
+        position:
+          type: integer
+          description: Auxiliary position (1 = first, 2 = second, etc.).
+        percentage:
+          type: number
+          format: float
+          description: Percentage applied (60, 40, 30, or 30).
+        fee:
+          type: number
+          format: float
+          description: Calculated fee for this auxiliary.
+
+    SurgeonBreakdown:
+      type: object
+      required: [principal_value, additional_gross, discount_rate, additional_discounted, surgeon_total]
+      properties:
+        principal_value:
+          type: number
+          format: float
+          description: Monetary value of the principal (highest-value) procedure.
+        additional_gross:
+          type: number
+          format: float
+          description: Sum of all non-principal procedure values before applying the CBHPM discount.
+        discount_rate:
+          type: number
+          format: float
+          description: Discount rate applied to additional procedures (0.50 for same route, 0.70 for different routes).
+        additional_discounted:
+          type: number
+          format: float
+          description: Sum of additional procedure values after applying the discount.
+        surgeon_total:
+          type: number
+          format: float
+          description: Final surgeon fee (principal_value + additional_discounted).
 
     CalculateResponse:
       type: object
       required:
         - code_breakdown
-        - total_base
+        - access_route_type
+        - surgeon_breakdown
         - lead_surgeon_fee
+        - individual_auxiliary_fees
         - auxiliaries_fee
         - anesthesiologist_fee
         - final_total
+        - total_base
       properties:
         code_breakdown:
           type: array
           items:
             $ref: '#/components/schemas/CodeBreakdown'
-          description: Per-code contribution to the total base.
-        total_base:
-          type: number
-          format: float
-          description: Sum of all selected code porte values.
+          description: Per-code contribution with principal flag.
+        access_route_type:
+          $ref: '#/components/schemas/AccessRouteType'
+        surgeon_breakdown:
+          $ref: '#/components/schemas/SurgeonBreakdown'
         lead_surgeon_fee:
           type: number
           format: float
-          description: Lead surgeon fee (100% of total_base).
+          description: Final surgeon fee (equals surgeon_breakdown.surgeon_total).
+        individual_auxiliary_fees:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuxiliaryFee'
+          description: Per-auxiliary fee details (CBHPM 5.1 – 60/40/30/30%).
         auxiliaries_fee:
           type: number
           format: float
-          description: Combined auxiliaries fee (30% first + 20% each subsequent).
+          description: Sum of all individual auxiliary fees.
         anesthesiologist_fee:
           type: number
           format: float
@@ -232,4 +297,8 @@ components:
         final_total:
           type: number
           format: float
-          description: Grand total (lead + auxiliaries + anesthesia).
+          description: Grand total (lead_surgeon_fee + auxiliaries_fee + anesthesiologist_fee).
+        total_base:
+          type: number
+          format: float
+          description: Simple sum of all selected code porte values (before discounting). Retained for compatibility.

@@ -6,7 +6,11 @@ import "afere/backend/internal/models"
 // anesthesiaFee is the fixed anesthesiologist fee in BRL, per the CBHPM table.
 const anesthesiaFee = 1200.00
 
-// PorteValues maps each porte code to its monetary value in BRL (CBHPM 2025/2026).
+// auxPercentages maps auxiliary position (1-based) to the CBHPM 5.1 percentage.
+// CBHPM 2022, item 5.1: 60% for 1st, 40% for 2nd, 30% for 3rd and 4th auxiliary.
+var auxPercentages = [5]float64{0, 0.60, 0.40, 0.30, 0.30}
+
+// PorteValues maps each porte code to its monetary value in BRL (CBHPM 2025/2026, Faixa Original).
 var PorteValues = map[string]float64{
 	"1A":  26.74,
 	"1B":  53.48,
@@ -52,33 +56,98 @@ var PorteValues = map[string]float64{
 	"14C": 6922.36,
 }
 
-// Calculate applies the CBHPM billing rules to a physician-assembled composition.
+// Calculate applies the validated CBHPM billing rules to a physician-assembled composition.
 //
-// Rules:
-//   - Lead surgeon fee = 100% of total base (sum of all selected code porte values).
-//   - 1st auxiliary = 30% of total base.
-//   - 2nd–4th auxiliary = 20% of total base each.
-//   - Anesthesiologist = fixed fee when required.
+// Surgeon valuation (CBHPM 2022):
+//   - Single procedure: 100% of its porte value.
+//   - Same access route (item 4.1): principal porte + 50% × Σ(additional portes).
+//   - Different access routes (item 4.2): principal porte + 70% × Σ(additional portes).
+//
+// Auxiliary valuation (CBHPM 2022, item 5.1, applied to the full surgeon total per item 5.2):
+//   - 1st auxiliary: 60% of surgeon total.
+//   - 2nd auxiliary: 40% of surgeon total.
+//   - 3rd auxiliary: 30% of surgeon total.
+//   - 4th auxiliary: 30% of surgeon total.
 func Calculate(
 	codes []models.SelectedCode,
 	auxiliariesCount int,
 	requiresAnesthesia bool,
+	accessRoute models.AccessRouteType,
 ) models.CalculationResult {
-	breakdown := make([]models.CodeBreakdown, 0, len(codes))
-	totalBase := 0.0
+	// ── Step 1: resolve porte values and find the principal (highest value) ─────
 
-	for _, c := range codes {
-		val := PorteValues[c.Porte]
-		breakdown = append(breakdown, models.CodeBreakdown{
-			CBHPMCode:   c.CBHPMCode,
-			Description: c.Description,
-			Porte:       c.Porte,
-			BaseValue:   val,
-		})
-		totalBase += val
+	type entry struct {
+		code  models.SelectedCode
+		value float64
 	}
 
-	auxFee := auxiliaryFee(totalBase, auxiliariesCount)
+	entries := make([]entry, len(codes))
+	totalBase := 0.0
+	principalIdx := 0
+
+	for i, c := range codes {
+		val := PorteValues[c.Porte]
+		entries[i] = entry{code: c, value: val}
+		totalBase += val
+		if val > entries[principalIdx].value {
+			principalIdx = i
+		}
+	}
+
+	// ── Step 2: compute surgeon fee per CBHPM 4.1 / 4.2 ─────────────────────
+
+	principalValue := entries[principalIdx].value
+
+	additionalGross := 0.0
+	for i, e := range entries {
+		if i != principalIdx {
+			additionalGross += e.value
+		}
+	}
+
+	discountRate := discountRateFor(accessRoute, len(codes))
+	additionalDiscounted := additionalGross * discountRate
+	surgeonTotal := principalValue + additionalDiscounted
+
+	surgeonBreakdown := models.SurgeonBreakdown{
+		PrincipalValue:       principalValue,
+		AdditionalGross:      additionalGross,
+		DiscountRate:         discountRate,
+		AdditionalDiscounted: additionalDiscounted,
+		SurgeonTotal:         surgeonTotal,
+	}
+
+	// ── Step 3: build per-code breakdown ─────────────────────────────────────
+
+	breakdown := make([]models.CodeBreakdown, len(entries))
+	for i, e := range entries {
+		breakdown[i] = models.CodeBreakdown{
+			CBHPMCode:   e.code.CBHPMCode,
+			Description: e.code.Description,
+			Porte:       e.code.Porte,
+			BaseValue:   e.value,
+			IsPrincipal: i == principalIdx,
+		}
+	}
+
+	// ── Step 4: auxiliary fees per CBHPM 5.1 applied to surgeon total (5.2) ──
+
+	individualAuxFees := make([]models.AuxiliaryFee, 0, auxiliariesCount)
+	auxTotal := 0.0
+
+	for pos := 1; pos <= auxiliariesCount; pos++ {
+		pct := auxPercentages[pos]
+		fee := surgeonTotal * pct
+		individualAuxFees = append(individualAuxFees, models.AuxiliaryFee{
+			Position:   pos,
+			Percentage: pct * 100,
+			Fee:        fee,
+		})
+		auxTotal += fee
+	}
+
+	// ── Step 5: anesthesiologist ──────────────────────────────────────────────
+
 	anesth := 0.0
 	if requiresAnesthesia {
 		anesth = anesthesiaFee
@@ -86,23 +155,27 @@ func Calculate(
 
 	return models.CalculationResult{
 		CodeBreakdown:       breakdown,
-		TotalBase:           totalBase,
-		LeadSurgeonFee:      totalBase,
-		AuxiliariesFee:      auxFee,
+		AccessRouteType:     accessRoute,
+		SurgeonBreakdown:    surgeonBreakdown,
+		LeadSurgeonFee:      surgeonTotal,
+		IndividualAuxFees:   individualAuxFees,
+		AuxiliariesFee:      auxTotal,
 		AnesthesiologistFee: anesth,
-		FinalTotal:          totalBase + auxFee + anesth,
+		FinalTotal:          surgeonTotal + auxTotal + anesth,
+		TotalBase:           totalBase,
 	}
 }
 
-// auxiliaryFee computes the combined fee for all auxiliary surgeons.
-// First auxiliary receives 30%; each additional receives 20%, all applied to base.
-func auxiliaryFee(base float64, count int) float64 {
-	if count <= 0 {
-		return 0
+// discountRateFor returns the multiplier applied to additional procedures.
+// With a single selected code there are no additional procedures, so the rate is 1.0
+// (the full value is captured as the principal).
+// CBHPM 4.1: same route → 0.50; CBHPM 4.2: different routes → 0.70.
+func discountRateFor(route models.AccessRouteType, codeCount int) float64 {
+	if codeCount <= 1 {
+		return 1.0
 	}
-	total := base * 0.30
-	for i := 2; i <= count; i++ {
-		total += base * 0.20
+	if route == models.AccessRouteDifferent {
+		return 0.70
 	}
-	return total
+	return 0.50
 }

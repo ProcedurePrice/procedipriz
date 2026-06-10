@@ -29,6 +29,10 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "auxiliaries_count must be between 0 and 4", http.StatusBadRequest)
 		return
 	}
+	if req.AccessRouteType != generated.AccessRouteSame && req.AccessRouteType != generated.AccessRouteDifferent {
+		http.Error(w, "access_route_type must be 'same' or 'different'", http.StatusBadRequest)
+		return
+	}
 
 	selected := make([]models.SelectedCode, 0, len(req.SelectedCodes))
 	for _, c := range req.SelectedCodes {
@@ -43,7 +47,8 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia)
+	accessRoute := models.AccessRouteType(req.AccessRouteType)
+	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia, accessRoute)
 
 	breakdown := make([]generated.CodeBreakdown, 0, len(result.CodeBreakdown))
 	for _, b := range result.CodeBreakdown {
@@ -52,15 +57,34 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 			Description: b.Description,
 			Porte:       b.Porte,
 			BaseValue:   b.BaseValue,
+			IsPrincipal: b.IsPrincipal,
+		})
+	}
+
+	auxFees := make([]generated.AuxiliaryFee, 0, len(result.IndividualAuxFees))
+	for _, a := range result.IndividualAuxFees {
+		auxFees = append(auxFees, generated.AuxiliaryFee{
+			Position:   a.Position,
+			Percentage: a.Percentage,
+			Fee:        a.Fee,
 		})
 	}
 
 	respondJSON(w, http.StatusOK, generated.CalculateResponse{
-		CodeBreakdown:       breakdown,
-		TotalBase:           result.TotalBase,
+		CodeBreakdown:   breakdown,
+		AccessRouteType: generated.AccessRouteType(result.AccessRouteType),
+		SurgeonBreakdown: generated.SurgeonBreakdown{
+			PrincipalValue:       result.SurgeonBreakdown.PrincipalValue,
+			AdditionalGross:      result.SurgeonBreakdown.AdditionalGross,
+			DiscountRate:         result.SurgeonBreakdown.DiscountRate,
+			AdditionalDiscounted: result.SurgeonBreakdown.AdditionalDiscounted,
+			SurgeonTotal:         result.SurgeonBreakdown.SurgeonTotal,
+		},
 		LeadSurgeonFee:      result.LeadSurgeonFee,
+		IndividualAuxFees:   auxFees,
 		AuxiliariesFee:      result.AuxiliariesFee,
 		AnesthesiologistFee: result.AnesthesiologistFee,
 		FinalTotal:          result.FinalTotal,
+		TotalBase:           result.TotalBase,
 	})
 }
