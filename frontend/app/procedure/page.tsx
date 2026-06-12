@@ -914,6 +914,12 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                       <span className="text-right font-semibold">{money.format(calculation.anesthesiologist_fee)}</span>
                     </>
                   )}
+                  {calculation.urgency_emergency_applied && (
+                    <>
+                      <span className="text-amber-300">Urgência/Emergência (+{calculation.urgency_emergency_percentage.toFixed(0)}%)</span>
+                      <span className="text-right font-semibold text-amber-300">+{money.format(calculation.urgency_emergency_value)}</span>
+                    </>
+                  )}
                 </div>
                 <div className="mb-0.5 text-xs font-semibold uppercase tracking-[0.5px] opacity-75">Total da Equipe</div>
                 <div className="font-grotesk text-[36px] font-bold leading-none tracking-tight">
