@@ -1,12 +1,12 @@
 "use client";
 
-import { Activity, ArrowUpRight, Info } from "lucide-react";
+import { Activity, Check, Copy, Info, Printer } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/components/ui/utils";
 
-// ─── Domain types ────────────────────────────────────────────────────────────
+// ─── Domain types ─────────────────────────────────────────────────────────────
 
 type AccessRouteType = "same" | "different";
 
@@ -46,11 +46,38 @@ type CalculationResult = {
   total_base: number;
 };
 
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ─── Print + screen CSS ───────────────────────────────────────────────────────
 
-function Section({
+const PAGE_STYLES = `
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    .print-bg { background: #ffffff !important; padding: 0 !important; }
+    .print-card {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      ring: none !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+    }
+    .report-section { break-inside: avoid; }
+    .total-screen { display: none !important; }
+    .total-print { display: block !important; }
+    @page { margin: 1.5cm 2cm; size: A4 portrait; }
+  }
+  @media screen {
+    .print-only { display: none; }
+    .total-print { display: none; }
+  }
+`;
+
+// ─── Layout primitives ────────────────────────────────────────────────────────
+
+function ReportSection({
   label,
   children,
   className,
@@ -60,22 +87,20 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("border-b border-slate-100 bg-white px-8 py-14 sm:px-12 sm:py-16", className)}>
+    <section className={cn("report-section border-b border-slate-100 px-8 py-12 sm:px-12 sm:py-14", className)}>
       {label && (
-        <p className="mb-8 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400">{label}</p>
+        <p className="mb-7 text-[9px] font-bold uppercase tracking-[0.26em] text-slate-400">{label}</p>
       )}
       {children}
     </section>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MetaItem({ label, value }: { label: string; value: string }) {
+function MetaField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">{label}</span>
-      <span className="mt-0.5 block text-[14px] font-semibold text-slate-700">{value}</span>
+      <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">{label}</span>
+      <span className="mt-1 block text-[13.5px] font-semibold text-slate-800">{value}</span>
     </div>
   );
 }
@@ -115,19 +140,78 @@ function BreakdownLine({
 
 function TeamCard({ role, note, value }: { role: string; note?: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+    <div className="report-section rounded-xl bg-white p-5 ring-1 ring-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
         {role}
         {note && <span className="ml-2 text-teal-700">{note}</span>}
       </p>
-      <p className="mt-4 font-grotesk text-[20px] font-bold leading-none tracking-tight text-slate-900">
+      <p className="mt-3 font-grotesk text-[22px] font-bold leading-none tracking-tight text-slate-900">
         {money.format(value)}
       </p>
     </div>
   );
 }
 
-// ─── Share content ────────────────────────────────────────────────────────────
+function SummaryPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="text-[11px] text-slate-400">
+      {label}{" "}
+      <span className="font-grotesk font-semibold tabular-nums text-slate-200">{value}</span>
+    </span>
+  );
+}
+
+// Left-bordered explanation block for "Como foi calculado"
+function ExplainBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-4">
+      <div className="w-0.5 shrink-0 rounded-full bg-teal-600/25 self-stretch" />
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
+        <div className="space-y-1 text-[13px] leading-relaxed text-slate-500">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Action buttons (hidden on print) ────────────────────────────────────────
+
+function ActionButtons() {
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  return (
+    <div className="no-print flex items-center gap-2">
+      <button
+        type="button"
+        onClick={copyLink}
+        className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+      >
+        {copied
+          ? <Check size={12} className="text-teal-600" aria-hidden="true" />
+          : <Copy size={12} aria-hidden="true" />}
+        <span>{copied ? "Copiado!" : "Copiar link"}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => window.print()}
+        className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+      >
+        <Printer size={12} aria-hidden="true" />
+        <span className="hidden sm:inline">Imprimir relatório</span>
+        <span className="sm:hidden">Imprimir</span>
+      </button>
+    </div>
+  );
+}
+
+// ─── Report body ──────────────────────────────────────────────────────────────
 
 function ShareContent() {
   const searchParams = useSearchParams();
@@ -152,7 +236,6 @@ function ShareContent() {
     }
 
     const parsedCodes = codesParam.split(",").filter(Boolean);
-
     if (parsedCodes.length === 0) {
       setError("Nenhum código CBHPM encontrado no link.");
       setLoading(false);
@@ -222,51 +305,55 @@ function ShareContent() {
     );
   }
 
-  const ruleNote =
+  if (!calculation) return null;
+
+  const principalCode = calculation.code_breakdown.find((b) => b.is_principal);
+  const additionalCodes = calculation.code_breakdown.filter((b) => !b.is_principal);
+  const hasMultiProcedure = additionalCodes.length > 0;
+  const hasAuxiliaries = auxiliariesCount > 0 && calculation.individual_auxiliary_fees.length > 0;
+  const hasTeam = hasAuxiliaries || calculation.anesthesiologist_fee > 0;
+
+  const accessRuleLabel =
     accessRoute === "same"
-      ? "Mesma via de acesso · CBHPM item 4.1 · adicionais a 50%"
-      : "Vias de acesso diferentes · CBHPM item 4.2 · adicionais a 70%";
+      ? "Mesma via de acesso (CBHPM item 4.1) — adicionais valorados a 50%"
+      : "Vias de acesso diferentes (CBHPM item 4.2) — adicionais valorados a 70%";
 
-  const hasTeam =
-    (calculation?.individual_auxiliary_fees?.length ?? 0) > 0 ||
-    (calculation?.anesthesiologist_fee ?? 0) > 0;
-
-  const hasMultiProcedure = (calculation?.code_breakdown?.length ?? 0) > 1;
+  const discountPct = calculation.surgeon_breakdown.discount_rate === 0.5 ? "50%" : "70%";
 
   return (
     <article>
-      {/* ── 1. Procedimento ──────────────────────────────────── */}
-      <Section label="Procedimento">
-        <h2 className="m-0 text-[22px] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[26px]">
+      {/* ── 1. Procedimento ───────────────────────────────────── */}
+      <ReportSection label="Procedimento">
+        <h1 className="m-0 text-[22px] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[26px]">
           {procedure?.name ?? "—"}
-        </h2>
-        <div className="mt-10 flex flex-wrap gap-x-12 gap-y-5">
-          <MetaItem
+        </h1>
+        <div className="mt-8 grid grid-cols-3 gap-x-6 gap-y-5">
+          <MetaField
             label="Via de acesso"
             value={accessRoute === "same" ? "Mesma via" : "Vias diferentes"}
           />
-          <MetaItem
+          <MetaField
             label="Auxiliares"
-            value={`${auxiliariesCount} ${auxiliariesCount === 1 ? "auxiliar" : "auxiliares"}`}
+            value={auxiliariesCount === 0 ? "Nenhum" : `${auxiliariesCount} ${auxiliariesCount === 1 ? "auxiliar" : "auxiliares"}`}
           />
-          <MetaItem
+          <MetaField
             label="Anestesiologista"
             value={requiresAnesthesia ? "Incluso" : "Não incluso"}
           />
         </div>
-      </Section>
+      </ReportSection>
 
-      {/* ── 2. Composição CBHPM ───────────────────────────────── */}
-      <Section label="Composição CBHPM">
+      {/* ── 2. Composição CBHPM ──────────────────────────────── */}
+      <ReportSection label="Composição CBHPM">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100">
-                {(["Código", "Descrição", "Porte", "Valor"] as const).map((h, i) => (
+                {(["Código", "Descrição", "Porte", "Valor base"] as const).map((h, i) => (
                   <th
                     key={h}
                     className={cn(
-                      "pb-4 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400",
+                      "pb-4 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400",
                       i >= 2 && "text-right",
                     )}
                   >
@@ -276,14 +363,8 @@ function ShareContent() {
               </tr>
             </thead>
             <tbody>
-              {calculation?.code_breakdown.map((b, idx) => (
-                <tr
-                  key={b.cbhpm_code}
-                  className={cn(
-                    "border-b border-slate-50 last:border-0",
-                    idx % 2 === 1 && "bg-slate-50/40",
-                  )}
-                >
+              {calculation.code_breakdown.map((b, idx) => (
+                <tr key={b.cbhpm_code} className={cn("border-b border-slate-50 last:border-0", idx % 2 === 1 && "bg-slate-50/40")}>
                   <td className="py-5 pr-5">
                     <span className="font-mono text-[11px] text-slate-500">{b.cbhpm_code}</span>
                     {b.is_principal && (
@@ -303,11 +384,11 @@ function ShareContent() {
           </table>
         </div>
 
-        {hasMultiProcedure && calculation && (
+        {hasMultiProcedure && (
           <div className="mt-10 overflow-hidden rounded-xl border border-slate-100">
             <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                Detalhamento do cirurgião
+                Detalhamento — cirurgião principal
               </p>
             </div>
             <div className="space-y-3 bg-white px-5 py-5">
@@ -316,12 +397,12 @@ function ShareContent() {
                 value={money.format(calculation.surgeon_breakdown.principal_value)}
               />
               <BreakdownLine
-                label="Adicionais (bruto)"
+                label="Procedimentos adicionais (bruto)"
                 value={money.format(calculation.surgeon_breakdown.additional_gross)}
                 muted
               />
               <BreakdownLine
-                label={`Adicionais × ${calculation.surgeon_breakdown.discount_rate === 0.5 ? "50%" : "70%"}`}
+                label={`Regra aplicada — adicionais × ${discountPct}`}
                 value={money.format(calculation.surgeon_breakdown.additional_discounted)}
                 muted
               />
@@ -335,12 +416,12 @@ function ShareContent() {
             </div>
           </div>
         )}
-      </Section>
+      </ReportSection>
 
-      {/* ── 3. Team cards ────────────────────────────────────── */}
-      {hasTeam && calculation && (
-        <Section label="Equipe Cirúrgica">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      {/* ── 3. Equipe cirúrgica ──────────────────────────────── */}
+      {hasTeam && (
+        <ReportSection label="Equipe Cirúrgica">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <TeamCard role="Cirurgião Principal" value={calculation.lead_surgeon_fee} />
             {calculation.individual_auxiliary_fees.map((af) => (
               <TeamCard
@@ -354,164 +435,274 @@ function ShareContent() {
               <TeamCard role="Anestesiologista" value={calculation.anesthesiologist_fee} />
             )}
           </div>
-        </Section>
+        </ReportSection>
       )}
 
-      {/* ── 4. Total da equipe — subtle dark summary ─────────── */}
-      {calculation && (
-        <section
-          className="border-b border-slate-700/30 px-8 py-14 sm:px-12 sm:py-16"
-          style={{ background: "#1e293b" }}
-        >
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-slate-300">
-            Total da Equipe
-          </p>
-          <p className="mt-4 font-grotesk text-[40px] font-bold leading-none tracking-tight text-white sm:text-[48px]">
-            {money.format(calculation.final_total)}
-          </p>
-          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryPill label="Cirurgião" value={money.format(calculation.lead_surgeon_fee)} />
-            {calculation.auxiliaries_fee > 0 && (
-              <SummaryPill label="Auxiliares" value={money.format(calculation.auxiliaries_fee)} />
-            )}
-            {calculation.anesthesiologist_fee > 0 && (
-              <SummaryPill
-                label="Anestesiologista"
-                value={money.format(calculation.anesthesiologist_fee)}
-              />
-            )}
-          </div>
-          <p className="mt-7 text-[10px] tracking-wide text-slate-400">{ruleNote}</p>
-        </section>
-      )}
+      {/* ── 4. Total da equipe — tela (dark) ────────────────── */}
+      <section
+        className="total-screen report-section border-b border-slate-800/20 px-8 py-14 sm:px-12 sm:py-16"
+        style={{ background: "#0F172A" }}
+      >
+        <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-slate-400">
+          Total da Equipe
+        </p>
+        <p className="mt-4 font-grotesk text-[42px] font-bold leading-none tracking-tight text-white sm:text-[50px]">
+          {money.format(calculation.final_total)}
+        </p>
+        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+          <SummaryPill label="Cirurgião" value={money.format(calculation.lead_surgeon_fee)} />
+          {calculation.auxiliaries_fee > 0 && (
+            <SummaryPill label="Auxiliares" value={money.format(calculation.auxiliaries_fee)} />
+          )}
+          {calculation.anesthesiologist_fee > 0 && (
+            <SummaryPill label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
+          )}
+        </div>
+        <p className="mt-7 text-[10px] leading-relaxed tracking-wide text-slate-500">
+          {accessRuleLabel}
+        </p>
+      </section>
 
-      {/* ── 5. Metodologia ────────────────────────────────────── */}
-      <Section label="Metodologia" className="border-b-0 bg-slate-50/60">
-        <div className="space-y-4 text-[13px] leading-relaxed text-slate-500">
-          <p>
-            Valores calculados com base na{" "}
-            <strong className="font-semibold text-slate-700">
-              Tabela CBHPM 2025/2026 (Faixa Original)
-            </strong>
-            , com variação INPC de 5,10% aplicada ao período de outubro de 2025 a setembro de 2026.
-          </p>
-          {accessRoute === "same" ? (
-            <p>
-              Aplicada a regra de{" "}
-              <strong className="font-semibold text-slate-700">mesma via de acesso</strong> (CBHPM item
-              4.1): o procedimento de maior porte é remunerado integralmente; os procedimentos adicionais
-              são valorados a <strong className="font-semibold text-slate-700">50%</strong> do respectivo
-              porte.
-            </p>
-          ) : (
-            <p>
-              Aplicada a regra de{" "}
-              <strong className="font-semibold text-slate-700">vias de acesso diferentes</strong> (CBHPM
-              item 4.2): o procedimento de maior porte é remunerado integralmente; os procedimentos
-              adicionais são valorados a{" "}
-              <strong className="font-semibold text-slate-700">70%</strong> do respectivo porte.
-            </p>
+      {/* ── 4. Total da equipe — impressão (light) ───────────── */}
+      <section className="total-print report-section border-b border-slate-200 px-8 py-10 sm:px-12">
+        <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-slate-400">
+          Total da Equipe
+        </p>
+        <p className="mt-3 font-grotesk text-[38px] font-bold leading-none tracking-tight text-slate-900">
+          {money.format(calculation.final_total)}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
+          <MetaField label="Cirurgião" value={money.format(calculation.lead_surgeon_fee)} />
+          {calculation.auxiliaries_fee > 0 && (
+            <MetaField label="Auxiliares" value={money.format(calculation.auxiliaries_fee)} />
           )}
-          {auxiliariesCount > 0 && (
-            <p>
-              Honorários de auxiliares calculados sobre o valor total do cirurgião principal (CBHPM item
-              5.2), conforme tabela do item 5.1:{" "}
-              <strong className="font-semibold text-slate-700">60% / 40% / 30% / 30%</strong> para 1º, 2º,
-              3º e 4º auxiliar, respectivamente.
-            </p>
+          {calculation.anesthesiologist_fee > 0 && (
+            <MetaField label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
           )}
-          <div className="mt-7 flex items-start gap-2.5 rounded-lg border border-slate-100 bg-white px-4 py-3.5">
-            <Info size={13} className="mt-0.5 shrink-0 text-slate-300" aria-hidden="true" />
-            <p className="m-0 text-[12px] leading-relaxed text-slate-400">
-              Valores de referência. Convênios e operadoras de saúde podem adotar tabelas e faixas
-              próprias.
+        </div>
+        <p className="mt-5 text-[10px] text-slate-400">{accessRuleLabel}</p>
+      </section>
+
+      {/* ── 5. Como foi calculado ────────────────────────────── */}
+      <ReportSection label="Como foi calculado" className="border-b-0 bg-slate-50/50">
+        <div className="space-y-8">
+          {/* Valor do cirurgião */}
+          <ExplainBlock title="Valor do cirurgião">
+            {!hasMultiProcedure ? (
+              <p>
+                O procedimento <strong className="text-slate-700">{principalCode?.description}</strong>{" "}
+                (porte {principalCode?.porte}) é remunerado integralmente pelo seu porte CBHPM.{" "}
+                Total do cirurgião:{" "}
+                <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+              </p>
+            ) : (
+              <>
+                <p>
+                  O procedimento de maior valor —{" "}
+                  <strong className="text-slate-700">{principalCode?.description}</strong>{" "}
+                  (porte {principalCode?.porte}, {money.format(calculation.surgeon_breakdown.principal_value)}) — é
+                  remunerado integralmente.
+                </p>
+                <p>
+                  Os {additionalCodes.length} procedimento{additionalCodes.length > 1 ? "s" : ""} adiciona{additionalCodes.length > 1 ? "is são valorados" : "l é valorado"} a{" "}
+                  <strong className="text-slate-700">{discountPct}</strong> do respectivo porte,
+                  conforme a regra de{" "}
+                  <strong className="text-slate-700">
+                    {accessRoute === "same" ? "mesma via de acesso (CBHPM item 4.1)" : "vias de acesso diferentes (CBHPM item 4.2)"}
+                  </strong>
+                  . Subtotal adicional:{" "}
+                  {money.format(calculation.surgeon_breakdown.additional_discounted)}.
+                </p>
+                <p>
+                  Total do cirurgião:{" "}
+                  <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+                </p>
+              </>
+            )}
+          </ExplainBlock>
+
+          {/* Auxiliares */}
+          <ExplainBlock title="Auxiliares">
+            {!hasAuxiliaries ? (
+              <p>Não há auxiliares incluídos neste cálculo.</p>
+            ) : (
+              <>
+                <p>
+                  Honorários calculados sobre o valor total do cirurgião (
+                  <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>),
+                  conforme CBHPM item 5.2:
+                </p>
+                <ul className="mt-1 space-y-0.5 pl-1">
+                  {calculation.individual_auxiliary_fees.map((af) => (
+                    <li key={af.position} className="text-[12.5px]">
+                      <span className="text-slate-600">{af.position}º auxiliar:</span>{" "}
+                      <strong className="text-slate-700">{af.percentage}%</strong> ={" "}
+                      <strong className="font-grotesk text-slate-700">{money.format(af.fee)}</strong>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1">
+                  Total dos auxiliares:{" "}
+                  <strong className="text-slate-700">{money.format(calculation.auxiliaries_fee)}</strong>.
+                </p>
+              </>
+            )}
+          </ExplainBlock>
+
+          {/* Anestesiologista */}
+          <ExplainBlock title="Anestesiologista">
+            {calculation.anesthesiologist_fee > 0 ? (
+              <p>
+                Honorários de anestesiologista <strong className="text-slate-700">incluídos</strong>.
+                Valor fixo de referência:{" "}
+                <strong className="font-grotesk text-slate-700">{money.format(calculation.anesthesiologist_fee)}</strong>.
+              </p>
+            ) : (
+              <p>Anestesiologista não incluído neste cálculo.</p>
+            )}
+          </ExplainBlock>
+
+          {/* Total da equipe */}
+          <ExplainBlock title="Total da equipe">
+            <p>
+              Soma de cirurgião (
+              <strong className="font-grotesk text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>
+              ){calculation.auxiliaries_fee > 0 && (
+                <>, auxiliares (
+                  <strong className="font-grotesk text-slate-700">{money.format(calculation.auxiliaries_fee)}</strong>
+                  )</>
+              )}{calculation.anesthesiologist_fee > 0 && (
+                <> e anestesiologista (
+                  <strong className="font-grotesk text-slate-700">{money.format(calculation.anesthesiologist_fee)}</strong>
+                  )</>
+              )}{" "}
+              = <strong className="font-grotesk text-slate-700">{money.format(calculation.final_total)}</strong>.
             </p>
+          </ExplainBlock>
+
+          {/* Disclaimer */}
+          <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-white px-4 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <Info size={14} className="mt-px shrink-0 text-slate-300" aria-hidden="true" />
+            <div className="space-y-1 text-[12px] leading-relaxed text-slate-400">
+              <p>
+                Valores calculados com base na{" "}
+                <strong className="text-slate-500">Tabela CBHPM 2025/2026 (Faixa Original)</strong>,
+                com variação INPC de 5,10% aplicada ao período de outubro de 2025 a setembro de 2026.
+              </p>
+              <p>
+                Estes valores são de <strong className="text-slate-500">referência</strong>. Convênios e
+                operadoras de saúde podem adotar tabelas, faixas e multiplicadores próprios, sujeitos a
+                negociação contratual.
+              </p>
+            </div>
           </div>
         </div>
-      </Section>
+      </ReportSection>
     </article>
-  );
-}
-
-function SummaryPill({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="text-[11px] text-slate-400">
-      {label}{" "}
-      <span className="font-grotesk font-semibold tabular-nums text-slate-200">{value}</span>
-    </span>
   );
 }
 
 // ─── Page shell ───────────────────────────────────────────────────────────────
 
 export default function SharePage() {
-  const year = new Date().getFullYear();
   const reportDate = new Intl.DateTimeFormat("pt-BR", {
     day: "numeric",
     month: "long",
     year: "numeric",
   }).format(new Date());
+  const year = new Date().getFullYear();
 
   return (
-    <div
-      className="min-h-screen sm:py-10"
-      style={{
-        background:
-          "radial-gradient(ellipse 900px 450px at 50% 0px, rgba(15,118,110,0.06) 0%, transparent 65%), #eef2f7",
-      }}
-    >
+    <>
+      <style>{PAGE_STYLES}</style>
+
       <div
-        className="mx-auto max-w-[720px] overflow-hidden bg-white sm:rounded-2xl sm:ring-1 sm:ring-slate-900/5"
-        style={{ boxShadow: "0 4px 32px rgba(0,0,0,0.07), 0 2px 8px rgba(0,0,0,0.04)" }}
+        className="print-bg min-h-screen sm:py-10"
+        style={{
+          background:
+            "radial-gradient(ellipse 900px 480px at 50% 0px, rgba(15,118,110,0.07) 0%, transparent 65%), #edf0f5",
+        }}
       >
-        {/* Report header */}
-        <header className="flex items-center justify-between border-b border-slate-100 px-8 py-7 sm:px-12">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-800">
-              <Activity className="text-white" size={17} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-[15px] font-extrabold leading-none tracking-tight text-slate-900">
-                Afere
-              </p>
-              <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] leading-none text-slate-400">
-                Neurocirurgia
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-              Relatório de Honorários
-            </p>
-            <p className="mt-0.5 text-[11px] text-slate-400">{reportDate}</p>
-          </div>
-        </header>
-
-        {/* Content */}
-        <Suspense
-          fallback={
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
-            </div>
-          }
+        <div
+          className="print-card mx-auto max-w-[720px] overflow-hidden bg-white sm:rounded-2xl sm:ring-1 sm:ring-slate-900/5"
+          style={{ boxShadow: "0 4px 32px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}
         >
-          <ShareContent />
-        </Suspense>
+          {/* Accent stripe */}
+          <div
+            aria-hidden="true"
+            style={{
+              height: "3px",
+              background: "linear-gradient(90deg, #0D6E66 0%, #0F766E 40%, #14B8A6 100%)",
+            }}
+          />
 
-        {/* Report footer */}
-        <footer className="flex items-center justify-between border-t border-slate-100 bg-white px-8 py-7 sm:px-12">
-          <p className="text-[11px] text-slate-400">
-            <span className="font-semibold text-slate-500">Afere</span> · LabF5 · {year}
-          </p>
-          <Link
-            href="/"
-            className="flex items-center gap-1 text-[11px] font-semibold text-teal-700 transition-colors hover:text-teal-900"
+          {/* Report header */}
+          <header className="flex items-center justify-between border-b border-slate-100 px-8 py-6 sm:px-12">
+            <div className="flex items-center gap-3.5">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "linear-gradient(135deg, #0D6E66, #0F766E)" }}
+              >
+                <Activity className="text-white" size={17} aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-[15px] font-extrabold leading-none tracking-tight text-slate-900">
+                  Afere
+                </p>
+                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] leading-none text-slate-400">
+                  Neurocirurgia
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="hidden text-right sm:block">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  Relatório de Honorários
+                </p>
+                <p className="mt-0.5 text-[10px] text-slate-400">{reportDate}</p>
+              </div>
+              <ActionButtons />
+            </div>
+          </header>
+
+          {/* Print-only report date (hidden on screen, shown on print) */}
+          <div className="print-only border-b border-slate-100 px-8 py-3 sm:px-12">
+            <p className="text-[10px] text-slate-400">
+              Relatório de Honorários · Emitido em {reportDate}
+            </p>
+          </div>
+
+          {/* Content */}
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+              </div>
+            }
           >
-            Conhecer o Afere
-            <ArrowUpRight size={11} aria-hidden="true" />
-          </Link>
-        </footer>
+            <ShareContent />
+          </Suspense>
+
+          {/* Report footer */}
+          <footer className="border-t border-slate-100 px-8 py-6 sm:px-12">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-slate-400">
+                Gerado por{" "}
+                <span className="font-semibold text-slate-500">Afere</span>{" "}
+                · LabF5 · {year}
+              </p>
+              <Link
+                href="/"
+                className="no-print text-[11px] font-semibold text-teal-700 transition-colors hover:text-teal-900"
+              >
+                Conhecer o Afere ↗
+              </Link>
+              <p className="print-only text-[11px] text-slate-400">Valores de referência · CBHPM 2025/2026</p>
+            </div>
+          </footer>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

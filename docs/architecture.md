@@ -55,8 +55,9 @@ Responsibilities:
 - Auxiliary count selector (0–4) and anesthesia toggle
 - Real-time valuation as composition changes (debounced 150 ms)
 - Detailed breakdown: principal procedure, discount rule, per-auxiliary fees (CBHPM 5.1: 60/40/30/30%)
-- Share a calculation via URL (includes route param)
-- Render a shared calculation from URL params
+- Save and manage reusable surgical compositions (POST/PUT/DELETE `/api/compositions`)
+- Share a calculation via URL-encoded params — opens the Premium Sharing report page
+- Render the Premium Sharing report page: professional read-only medical report with per-value explanations, print support, and Open Graph metadata
 
 ### Backend
 
@@ -91,6 +92,35 @@ backend/
     migrations/            001_schema, 002_seed_portes, 003_seed_procedures, …
     query.sql              canonical SQL for PostgresRepository
 ```
+
+## Premium Sharing (v2.3.0)
+
+The shared calculation page (`/share?sbn=…&codes=…&a=…&an=…&route=…`) is a read-only professional report designed for distribution to other surgeons, assistants, hospitals, auditors, and administrative teams.
+
+### Design constraints
+
+- **Read-only**: no edit controls, no dark mode toggle, no composition save.
+- **Actions**: "Copiar link" (clipboard) and "Imprimir relatório" (`window.print()`).
+- **No PDF generation**: intentionally out of scope for v2.3.0. Print-to-PDF via the browser is the supported path.
+- **Print CSS**: `.no-print` hides actions and navigation; `.total-print` / `.total-screen` swaps the dark total section for a print-safe light version; `break-inside: avoid` on each section.
+- **Open Graph metadata**: served from `app/share/layout.tsx` (server component) with generic title/description since procedure name is not available server-side.
+- **"Como foi calculado"**: per-value explanation blocks for surgeon value, auxiliaries, anesthesiologist, and team total — each derived directly from the live calculation result.
+
+### URL format
+
+The share URL is built entirely client-side by the procedure page and contains all parameters needed to reconstruct the calculation without a database lookup:
+
+```
+/share?sbn={sbn_id}&codes={cbhpm1},{cbhpm2}&a={aux_count}&an={0|1}&route={same|different}
+```
+
+Existing shared links continue to work without change.
+
+### Future clean URLs (deferred)
+
+`/share/{public_id}` requires persisting the share event to the `calculations` table and a new backend route. Deferred post-v2.3.0.
+
+---
 
 ## Valuation Engine
 

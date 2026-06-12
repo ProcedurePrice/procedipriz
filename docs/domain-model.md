@@ -356,6 +356,33 @@ The home page "Minhas composições" tab lists saved compositions (no financial 
 
 ---
 
+## Premium Sharing (v2.3.0)
+
+### Purpose
+
+Premium Sharing transforms the shared calculation page into a professional medical report suitable for distribution to surgeons, hospitals, auditors, and administrative staff.
+
+### Characteristics
+
+| Property | Value |
+|---|---|
+| Route | `/share?sbn=…&codes=…&a=…&an=…&route=…` |
+| State | Read-only snapshot; values recalculated live from current CBHPM table |
+| Actions | Copiar link · Imprimir relatório |
+| Excluded | Dark mode · Edit controls · Composition save · PDF generation |
+| Metadata | Open Graph title/description via `app/share/layout.tsx` |
+| Print | `@media print` CSS: hides actions, swaps dark total section, avoids breaks |
+
+### Relationship to other concepts
+
+- A **Composition** is the reusable template owned by the physician.
+- A **Shared Calculation** (Premium Sharing) is the public-facing report — a live recalculation of parameters encoded in a URL, not a stored entity.
+- A **Shared Calculation snapshot** (legacy `calculations` table) is an optional stored record used only if/when the clean-URL feature is implemented.
+
+PDF generation is intentionally out of scope for v2.3.0. The browser's print-to-PDF produces an equivalent result.
+
+---
+
 ## Calculation Persistence (Legacy — Share Flow Only)
 
 ### Overview
