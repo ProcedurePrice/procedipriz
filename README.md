@@ -1,8 +1,186 @@
 # Afere
 
-**Afere** is a high-performance engineering solution strictly designed to solve one of the biggest operational bottlenecks in the medical billing routine of neurosurgeons: the agile, precise, and deterministic reconciliation of fees. The platform cross-references the specialty catalog of the SBN (Sociedade Brasileira de Neurocirurgia) with the guidelines and valuation tables of the CBHPM (Classificação Brasileira Hierarquizada de Procedimentos Médicos) catalog.
+**Afere** is a high-performance medical billing calculator built exclusively for neurosurgeons. It solves the operational friction of reconciling the SBN (*Sociedade Brasileira de Neurocirurgia*) specialty catalog with the CBHPM (*Classificação Brasileira Hierarquizada de Procedimentos Médicos*) valuation table — producing a precise, real-time fee breakdown for the entire surgical team in seconds.
 
-The entire application was architected under the **Spec-Driven Design (SDD)** philosophy, where API contracts and static models precede implementation, mitigating errors, eliminating the risk of medical billing rejections, and ensuring absolute mathematical compliance.
+The entire system is built under **Spec-Driven Design (SDD)**: the OpenAPI contract (`openapi.yaml`) is the single source of truth and precedes every implementation decision.
+
+---
+
+## Features
+
+- **Privacy-first landing screen** — a minimalist search interface that exposes no financial data, safe to open in front of patients or staff
+- **Real-time composition** — select an SBN procedure, pick which CBHPM codes were performed, toggle the access route and anesthesia; fees recalculate in under 150 ms
+- **Multi-procedure support** — compose multiple SBN procedures in one bill; CBHPM 4.1/4.2 discount rules applied automatically
+- **CBHPM-mandated auxiliaries** — auxiliary count is locked to the value specified in the CBHPM 2022 manual when the selected codes define it; free selection otherwise
+- **Save & retrieve calculations** — persist a completed valuation by URL-safe public ID; retrieve it later without authentication
+- **Delete saved calculations** — remove a saved calculation with a confirmation guard
+- **Shareable report** — copy a pre-filled URL that reconstructs the exact calculation state for any recipient
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Go 1.22+ · `net/http` · `oapi-codegen` · `sqlc` |
+| Database | PostgreSQL (Neon serverless) |
+| Frontend | Next.js 16 (App Router) · Turbopack · Tailwind CSS · shadcn/ui |
+| Dev environment | Docker Dev Containers |
+| CI | GitHub Actions |
+
+---
+
+## Project Structure
+
+```text
+afere/
+├── .claude/                     # Project-level Claude Code skills
+├── .devcontainer/               # Dev Container definition
+├── .github/workflows/           # CI pipelines
+├── backend/
+│   ├── cmd/api/main.go          # Entry point
+│   ├── db/migrations/           # SQL migrations (001–007)
+│   ├── internal/
+│   │   ├── config/              # Env config
+│   │   ├── generated/           # oapi-codegen output
+│   │   ├── handlers/            # HTTP handlers + tests
+│   │   ├── models/              # Domain types
+│   │   ├── repository/          # Interface + File + Postgres implementations
+│   │   └── service/             # Pure calculation engine
+│   └── go.mod
+├── data/
+│   ├── raw_pdfs/                # Source PDFs (SBN MCPN + CBHPM 2022)
+│   ├── generate_catalog.py      # Two-phase ETL → procedures.json
+│   └── generate_seed.py         # procedures.json → 003_seed_procedures.sql
+├── docs/                        # Architecture, domain model, flows
+├── frontend/
+│   ├── app/                     # Next.js App Router pages
+│   └── components/              # UI primitives (shadcn/ui + custom)
+├── CLAUDE.md                    # AI agent instructions
+├── openapi.yaml                 # API contract (source of truth)
+└── PRD.md                       # Product requirements
+```
+
+---
+
+## Business Rules
+
+### CBHPM 4.1 / 4.2 — Multi-procedure discount
+
+When multiple codes are billed in the same surgical act:
+
+| Scenario | Rate applied to additional procedures |
+|---|---|
+| Same access route (CBHPM 4.1) | 50% |
+| Different access routes (CBHPM 4.2) | 70% |
+
+The principal procedure (highest porte value) is always billed at 100%.
+
+### CBHPM 5.1 / 5.2 — Auxiliary surgeon fees
+
+Auxiliary fees are computed on the lead surgeon's total fee, not on `total_base`:
+
+| Position | Percentage |
+|---|---|
+| 1st auxiliary | 60% |
+| 2nd auxiliary | 40% |
+| 3rd auxiliary | 30% |
+| 4th auxiliary | 30% |
+
+The number of auxiliaries is determined by the highest `num_auxiliaries` value among the selected codes (CBHPM 5.2). When the manual mandates a value, the UI locks the selector automatically.
+
+### Anesthesiologist
+
+Optional fixed fee of **R$ 1,200.00** when the anesthesia toggle is enabled.
+
+See [Domain Model](docs/domain-model.md) for the complete valuation specification.
+
+---
+
+## Running Locally
+
+### Prerequisites
+
+Open the repo root in VS Code and accept **"Reopen in Container"** to load the pre-configured Dev Container (Go, Node.js, psql, pdfplumber included).
+
+### Backend
+
+```bash
+cd backend
+go run cmd/api/main.go
+```
+
+Set `DATABASE_URL` in `backend/.env` to connect to Neon. Without it the server falls back to the embedded `procedures.json` catalog (suitable for development).
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Next.js dev server runs on `http://localhost:3000` with Turbopack.
+
+### Database
+
+Apply migrations in order against your Neon database:
+
+```bash
+psql "$DATABASE_URL" -f backend/db/migrations/001_schema.sql
+psql "$DATABASE_URL" -f backend/db/migrations/002_seed_portes.sql
+psql "$DATABASE_URL" -f backend/db/migrations/003_seed_procedures.sql
+# ... through 007
+```
+
+Migration 003 is generated from `procedures.json` via `data/generate_seed.py`. Re-run the script after updating the procedure catalog.
+
+### ETL (procedure catalog)
+
+```bash
+# Requires: pdfplumber (pip install pdfplumber)
+# Optional: poppler-utils (pdftotext) for full SBN PDF re-parse
+python3 data/generate_catalog.py   # → backend/internal/repository/procedures.json
+python3 data/generate_seed.py      # → backend/db/migrations/003_seed_procedures.sql
+```
+
+---
+
+## API Reference
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/procedures/search?q=` | Search SBN procedures (≥2 chars) |
+| `GET` | `/api/procedures/{id}` | Procedure detail with CBHPM codes |
+| `POST` | `/api/calculate` | Compute fee breakdown |
+| `POST` | `/api/calculations` | Save a completed calculation |
+| `GET` | `/api/calculations` | List saved calculations |
+| `GET` | `/api/calculations/{public_id}` | Retrieve a saved calculation |
+| `DELETE` | `/api/calculations/{public_id}` | Delete a saved calculation |
+| `GET` | `/health` | Health check |
+
+Full schema: [`openapi.yaml`](openapi.yaml)
+
+---
+
+## Conventions
+
+### Language split
+
+| Context | Language |
+|---|---|
+| Code, variables, comments, commits, API fields | English |
+| UI labels, error messages, medical terminology | Portuguese (PT-BR) |
+
+### Branching
+
+| Branch | Purpose |
+|---|---|
+| `main` | Production — stable, audited |
+| `staging` | Pre-production homologation |
+| `feature-<name>` | Short-lived feature branches → PR into `staging` |
+
+---
 
 ## Documentation
 
@@ -13,100 +191,6 @@ The entire application was architected under the **Spec-Driven Design (SDD)** ph
 - [Deployment](docs/deployment.md)
 - [Roadmap](docs/roadmap.md)
 
-## 🚀 Technologies & Architecture
-
-The ecosystem adopts a **Monorepo** approach, unifying the presentation and computation layers for maximum cohesion and maintainability:
-
-* **Backend:** Developed in Go (Golang 1.22+), exclusively using the native `net/http` library for routing and request handling. Static typing and contract security are guaranteed by `oapi-codegen` and `sqlc` (compiling raw SQL queries into idiomatic, strictly type-safe Go code).
-
-* **Frontend:** Built with Next.js 16 (App Router), designed with a radical focus on UX and response speed. It uses the **Turbopack** engine (`next dev --turbo`) to ensure instantaneous local build times, styled via Tailwind CSS and highly accessible primitive components from shadcn/ui.
-
-* **Database:** PostgreSQL managed and scaled in a serverless manner through the **Neon** infrastructure.
-
-* **Development Environment:** Docker Dev Containers, surgically isolating all necessary tools (Go, Node.js, and CLI ecosystem tools).
-
-* **Quality & CI/CD:** Continuous integration via GitHub Actions for automated execution of unit tests.
-
-## 🗂️ Project Structure (3-Level Topology)
-
-The monorepo topology is structured up to the third level of depth to ensure a strict segregation of responsibilities:
-
-```text
-afere/
-├── .devcontainer/
-│   ├── devcontainer.json
-│   └── Dockerfile
-├── .github/
-│   └── workflows/
-├── backend/
-│   ├── cmd/
-│   ├── db/
-│   ├── internal/
-│   └── go.mod
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   └── package.json
-├── data/
-│   └── raw_pdfs/
-├── CLAUDE.md
-└── openapi.yaml
-```
-
-## 🧠 Business & Domain Rules
-
-The calculations performed by the API's business layer translate the general medical billing rules with surgical precision:
-
-One SBN surgical package maps to **one or more** CBHPM billable codes. Physicians compose a bill by selecting which codes to include and at what porte, then receive a real-time monetary breakdown per code and per role.
-
-* **Cirurgião Principal:** 100% of the sum of all selected CBHPM code porte values (`total_base`).
-
-* **1º Auxiliar:** 30% of `total_base`.
-
-* **2º, 3º e 4º Auxiliares:** 20% of `total_base` each.
-
-* **Anestesiologista:** Fixed R$ 1,200.00 if the anesthesia flag is enabled.
-
-See [Domain Model](docs/domain-model.md) for the full calculation specification and ER diagram.
-
-### Linguistic Conventions
-
-* **Infrastructure & Engineering:** All source code, contract documentation, variables, database tables, and Git commit messages MUST be written strictly in **English**.
-
-* **Domain & Experience:** All UI labels (e.g., *Buscar Procedimento*, *Porte do Procedimento*), visual error handling, surgical terms, and medical procedures extracted from the official manuals MUST be kept entirely in **Portuguese (PT-BR)**.
-
-## 🛠️ Execution Instructions
-
-### 1. Initializing the Environment
-
-Open the monorepo root in your editor. Confirm the prompt to **"Reopen in Container"** to load the isolated and pre-configured Dev Container ecosystem.
-
-### 2. Seeding the Database (ETL)
-
-The extraction of raw data from the PDFs and the initial population of the PostgreSQL (Neon) database are already handled by an external utility script. The Go backend assumes immutably that the tables are already populated.
-
-### 3. Running the Backend Server (Go)
-
-```bash
-cd backend
-go run cmd/api/main.go
-```
-
-### 4. Running the Frontend (Next.js 16 with Turbopack)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## 🌿 Branching Strategy & Version Control
-
-* **`main`:** Absolute source of truth. Stores only code in a stable, audited production state.
-
-* **`staging`:** Homologation and pre-production branch. Acts as a production mirror for executing integrated tests.
-
-* **`feature-<name>`:** Ephemeral branches for developing new capabilities or local refactoring. MUST be merged via Pull Request into `staging`.
-
 ---
-*UI Footer Requirement: The bottom of the application must contain the text "Made by LabF5". No other mentions of the development studio should exist in the UI or codebase.*
+
+*2026 · LabF5 · Todos os direitos reservados*
