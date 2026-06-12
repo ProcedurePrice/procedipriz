@@ -56,6 +56,10 @@ var PorteValues = map[string]float64{
 	"14C": 6922.36,
 }
 
+// urgencyRate is the CBHPM item 2 surcharge applied to medical acts in urgency/emergency
+// special hours (19h–7h, weekends, holidays).
+const urgencyRate = 0.30
+
 // Calculate applies the validated CBHPM billing rules to a physician-assembled composition.
 //
 // Surgeon valuation (CBHPM 2022):
@@ -68,11 +72,16 @@ var PorteValues = map[string]float64{
 //   - 2nd auxiliary: 40% of surgeon total.
 //   - 3rd auxiliary: 30% of surgeon total.
 //   - 4th auxiliary: 30% of surgeon total.
+//
+// Urgency/emergency surcharge (CBHPM 2022, item 2):
+//   When urgencyEmergency is true all medical fees (surgeon, auxiliaries, anesthesiologist)
+//   are increased by 30%. The surcharge is itemised in the result for auditability.
 func Calculate(
 	codes []models.SelectedCode,
 	auxiliariesCount int,
 	requiresAnesthesia bool,
 	accessRoute models.AccessRouteType,
+	urgencyEmergency bool,
 ) models.CalculationResult {
 	// ── Step 1: resolve porte values and find the principal (highest value) ─────
 
@@ -153,16 +162,53 @@ func Calculate(
 		anesth = anesthesiaFee
 	}
 
+	// ── Step 6: urgency/emergency surcharge (CBHPM item 2) ───────────────────
+	// The surgeon_breakdown reflects the base CBHPM calculation without the
+	// surcharge so the rule derivation remains fully auditable. The top-level
+	// fee fields (lead_surgeon_fee, auxiliaries_fee, anesthesiologist_fee,
+	// final_total) include the surcharge when urgencyEmergency is true.
+
+	var (
+		ueApplied     bool
+		uePct         float64
+		ueValue       float64
+		finalSurgeon  = surgeonTotal
+		finalAuxFees  = individualAuxFees
+		finalAux      = auxTotal
+		finalAnesth   = anesth
+	)
+
+	if urgencyEmergency {
+		ueApplied = true
+		uePct = urgencyRate * 100
+		ueValue = (surgeonTotal + auxTotal + anesth) * urgencyRate
+		finalSurgeon = surgeonTotal * (1 + urgencyRate)
+		finalAux = auxTotal * (1 + urgencyRate)
+		finalAnesth = anesth * (1 + urgencyRate)
+		scaled := make([]models.AuxiliaryFee, len(individualAuxFees))
+		for i, af := range individualAuxFees {
+			scaled[i] = models.AuxiliaryFee{
+				Position:   af.Position,
+				Percentage: af.Percentage,
+				Fee:        af.Fee * (1 + urgencyRate),
+			}
+		}
+		finalAuxFees = scaled
+	}
+
 	return models.CalculationResult{
-		CodeBreakdown:       breakdown,
-		AccessRouteType:     accessRoute,
-		SurgeonBreakdown:    surgeonBreakdown,
-		LeadSurgeonFee:      surgeonTotal,
-		IndividualAuxFees:   individualAuxFees,
-		AuxiliariesFee:      auxTotal,
-		AnesthesiologistFee: anesth,
-		FinalTotal:          surgeonTotal + auxTotal + anesth,
-		TotalBase:           totalBase,
+		CodeBreakdown:              breakdown,
+		AccessRouteType:            accessRoute,
+		SurgeonBreakdown:           surgeonBreakdown,
+		LeadSurgeonFee:             finalSurgeon,
+		IndividualAuxFees:          finalAuxFees,
+		AuxiliariesFee:             finalAux,
+		AnesthesiologistFee:        finalAnesth,
+		FinalTotal:                 finalSurgeon + finalAux + finalAnesth,
+		TotalBase:                  totalBase,
+		UrgencyEmergencyApplied:    ueApplied,
+		UrgencyEmergencyPercentage: uePct,
+		UrgencyEmergencyValue:      ueValue,
 	}
 }
 

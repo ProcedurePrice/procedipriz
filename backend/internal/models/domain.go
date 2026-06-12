@@ -85,6 +85,10 @@ type CalculationResult struct {
 	AnesthesiologistFee float64
 	FinalTotal          float64
 	TotalBase           float64
+	// CBHPM item 2 urgency/emergency surcharge (30% on all medical fees).
+	UrgencyEmergencyApplied    bool
+	UrgencyEmergencyPercentage float64 // 30.0 when applied
+	UrgencyEmergencyValue      float64 // absolute value of the surcharge
 }
 
 // Calculation is a persisted valuation record.
@@ -150,8 +154,10 @@ type Composition struct {
 	AccessRouteType    AccessRouteType
 	AuxiliariesCount   int
 	RequiresAnesthesia bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// UrgencyEmergency signals CBHPM item 2 — 30% surcharge on medical fees.
+	UrgencyEmergency bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // CompositionSummary is the lightweight projection for list responses.

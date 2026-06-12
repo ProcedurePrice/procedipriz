@@ -120,9 +120,10 @@ func (r *PostgresRepository) SaveComposition(comp models.Composition, physicianI
 	err = r.pool.QueryRow(ctx, `
 		INSERT INTO compositions (
 			public_id, physician_id, name, sbn_procedure_id, sbn_procedure_name,
-			selected_codes, access_route_type, auxiliaries_count, requires_anesthesia
+			selected_codes, access_route_type, auxiliaries_count, requires_anesthesia,
+			urgency_emergency
 		) VALUES (
-			$1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7, $8, $9
+			$1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7, $8, $9, $10
 		)
 		RETURNING id::text, created_at, updated_at
 	`,
@@ -135,6 +136,7 @@ func (r *PostgresRepository) SaveComposition(comp models.Composition, physicianI
 		string(comp.AccessRouteType),
 		comp.AuxiliariesCount,
 		comp.RequiresAnesthesia,
+		comp.UrgencyEmergency,
 	).Scan(&comp.ID, &comp.CreatedAt, &comp.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: save composition: %w", err)
@@ -201,7 +203,7 @@ func (r *PostgresRepository) GetCompositionByPublicID(publicID, physicianID stri
 			COALESCE(sbn_procedure_id, ''), sbn_procedure_name,
 			selected_codes, access_route_type,
 			auxiliaries_count, requires_anesthesia,
-			created_at, updated_at
+			urgency_emergency, created_at, updated_at
 		FROM compositions
 		WHERE public_id = $1 AND physician_id = $2::uuid
 	`, publicID, physicianID).Scan(
@@ -209,7 +211,7 @@ func (r *PostgresRepository) GetCompositionByPublicID(publicID, physicianID stri
 		&comp.SBNProcedureID, &comp.SBNProcedureName,
 		&codesJSON, &accessRoute,
 		&comp.AuxiliariesCount, &comp.RequiresAnesthesia,
-		&comp.CreatedAt, &comp.UpdatedAt,
+		&comp.UrgencyEmergency, &comp.CreatedAt, &comp.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -244,6 +246,7 @@ func (r *PostgresRepository) UpdateComposition(publicID string, comp models.Comp
 			access_route_type   = $7,
 			auxiliaries_count   = $8,
 			requires_anesthesia = $9,
+			urgency_emergency   = $10,
 			updated_at          = now()
 		WHERE public_id = $1 AND physician_id = $2::uuid
 		RETURNING id::text, public_id::text, created_at, updated_at
@@ -257,6 +260,7 @@ func (r *PostgresRepository) UpdateComposition(publicID string, comp models.Comp
 		string(comp.AccessRouteType),
 		comp.AuxiliariesCount,
 		comp.RequiresAnesthesia,
+		comp.UrgencyEmergency,
 	).Scan(&comp.ID, &comp.PublicID, &comp.CreatedAt, &comp.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

@@ -57,6 +57,7 @@ type CalculateRequest struct {
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
+	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
 }
 
 // CodeBreakdown is the per-code contribution in the calculation result.
@@ -95,6 +96,10 @@ type CalculateResponse struct {
 	AnesthesiologistFee float64          `json:"anesthesiologist_fee"`
 	FinalTotal          float64          `json:"final_total"`
 	TotalBase           float64          `json:"total_base"`
+	// CBHPM item 2 urgency/emergency surcharge fields.
+	UrgencyEmergencyApplied    bool    `json:"urgency_emergency_applied"`
+	UrgencyEmergencyPercentage float64 `json:"urgency_emergency_percentage"`
+	UrgencyEmergencyValue      float64 `json:"urgency_emergency_value"`
 }
 
 // ─── Composition types (primary persistence model) ───────────────────────────
@@ -108,6 +113,7 @@ type SaveCompositionRequest struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
+	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
 }
 
 // UpdateCompositionRequest is the body for PUT /api/compositions/{id}.
@@ -119,6 +125,7 @@ type UpdateCompositionRequest struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
+	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
 }
 
 // SaveCompositionResponse is returned by a successful POST /api/compositions.
@@ -149,6 +156,7 @@ type CompositionDetail struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
+	UrgencyEmergency   bool            `json:"urgency_emergency"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }

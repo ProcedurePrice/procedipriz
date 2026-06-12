@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  AlertCircle,
   BookmarkCheck,
   Calculator,
   Check,
@@ -56,6 +57,9 @@ type CalculationResult = {
   anesthesiologist_fee: number;
   final_total: number;
   total_base: number;
+  urgency_emergency_applied: boolean;
+  urgency_emergency_percentage: number;
+  urgency_emergency_value: number;
 };
 
 type CompositionDetail = {
@@ -67,6 +71,7 @@ type CompositionDetail = {
   access_route_type: "same" | "different";
   auxiliaries_count: number;
   requires_anesthesia: boolean;
+  urgency_emergency: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -99,6 +104,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   const [auxiliariesCount, setAuxiliariesCount] = useState(1);
   const [requiresAnesthesia, setRequiresAnesthesia] = useState(true);
+  const [urgencyEmergency, setUrgencyEmergency] = useState(false);
   const [accessRoute, setAccessRoute] = useState<AccessRouteType>(initialRoute);
 
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
@@ -181,6 +187,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       setCompositionName(comp.name);
       setAccessRoute(comp.access_route_type);
       setRequiresAnesthesia(comp.requires_anesthesia);
+      setUrgencyEmergency(comp.urgency_emergency ?? false);
       setAuxiliariesCount(comp.auxiliaries_count);
 
       if (!comp.sbn_procedure_id) return;
@@ -289,8 +296,9 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       auxiliaries_count: auxiliariesCount,
       requires_anesthesia: requiresAnesthesia,
       access_route_type: accessRoute,
+      urgency_emergency: urgencyEmergency,
     };
-  }, [allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute]);
+  }, [allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, urgencyEmergency]);
 
   // ── Real-time calculation (debounced 150 ms) ──────────────────────────────
 
@@ -339,6 +347,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         access_route_type: accessRoute,
         auxiliaries_count: auxiliariesCount,
         requires_anesthesia: requiresAnesthesia,
+        urgency_emergency: urgencyEmergency,
       };
       const res = await fetch("/api/compositions", {
         method: "POST",
@@ -361,7 +370,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     } finally {
       setSavingComposition(false);
     }
-  }, [compositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, getToken]);
+  }, [compositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, urgencyEmergency, getToken]);
 
   // ── Update composition (loaded from URL) ──────────────────────────────────
 
@@ -384,6 +393,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         access_route_type: accessRoute,
         auxiliaries_count: auxiliariesCount,
         requires_anesthesia: requiresAnesthesia,
+        urgency_emergency: urgencyEmergency,
       };
       const res = await fetch(`/api/compositions/${loadedCompositionId}`, {
         method: "PUT",
@@ -403,7 +413,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     } finally {
       setSavingComposition(false);
     }
-  }, [loadedCompositionId, loadedCompositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, getToken]);
+  }, [loadedCompositionId, loadedCompositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, urgencyEmergency, getToken]);
 
   // ── Share ─────────────────────────────────────────────────────────────────
 
@@ -419,11 +429,12 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     url.searchParams.set("a", String(auxiliariesCount));
     url.searchParams.set("an", requiresAnesthesia ? "1" : "0");
     url.searchParams.set("route", accessRoute);
+    if (urgencyEmergency) url.searchParams.set("ue", "1");
     navigator.clipboard.writeText(url.toString()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedProcedures, calculation, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute]);
+  }, [selectedProcedures, calculation, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, urgencyEmergency]);
 
   const toggleCode = (code: string) => {
     setSelectedCodes((prev) => {
@@ -692,17 +703,47 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                 </div>
               </div>
 
-              <div className="medical-toggle-panel flex items-center justify-between gap-4 rounded-2xl border px-4 py-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="clinical-icon-chip flex h-8 w-8 items-center justify-center rounded-full">
-                    <HeartPulse aria-hidden="true" size={16} />
+              <div className="space-y-2">
+                <div className="medical-toggle-panel flex items-center justify-between gap-4 rounded-2xl border px-4 py-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="clinical-icon-chip flex h-8 w-8 items-center justify-center rounded-full">
+                      <HeartPulse aria-hidden="true" size={16} />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-slate-950 dark:text-slate-50">Anestesiologista</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Incluir honorários do anestesista</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[13px] font-semibold text-slate-950 dark:text-slate-50">Anestesiologista</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">Incluir honorários do anestesista</div>
-                  </div>
+                  <Toggle checked={requiresAnesthesia} onChange={setRequiresAnesthesia} />
                 </div>
-                <Toggle checked={requiresAnesthesia} onChange={setRequiresAnesthesia} />
+
+                <div className={cn(
+                  "flex items-start justify-between gap-4 rounded-2xl border px-4 py-4 transition-colors",
+                  urgencyEmergency
+                    ? "border-amber-200 bg-amber-50/60 dark:border-amber-400/20 dark:bg-amber-900/10"
+                    : "border-slate-100 dark:border-slate-800",
+                )}>
+                  <div className="flex items-start gap-2.5">
+                    <div className={cn(
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                      urgencyEmergency
+                        ? "bg-amber-100 dark:bg-amber-900/30"
+                        : "bg-slate-100 dark:bg-slate-800",
+                    )}>
+                      <AlertCircle aria-hidden="true" size={16} className={urgencyEmergency ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"} />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-slate-950 dark:text-slate-50">
+                        Aplicar acréscimo de urgência/emergência (+30%)
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Conforme item 2 das Instruções Gerais da CBHPM, atos médicos em urgência/emergência
+                        realizados entre 19h e 7h, ou em sábados, domingos e feriados, podem receber acréscimo de 30%.
+                      </div>
+                    </div>
+                  </div>
+                  <Toggle checked={urgencyEmergency} onChange={setUrgencyEmergency} />
+                </div>
               </div>
             </>
           )}
@@ -775,6 +816,24 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                   {ruleLabel}
                 </div>
               </section>
+
+              {/* ── Urgência/emergência ──────────────────────────────────── */}
+              {calculation.urgency_emergency_applied && (
+                <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-amber-200 dark:border-amber-400/20 bg-amber-50/70 dark:bg-amber-900/10 px-3.5 py-3">
+                  <AlertCircle size={14} className="mt-px shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                  <div>
+                    <span className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
+                      Acréscimo de urgência/emergência: +{calculation.urgency_emergency_percentage}%
+                    </span>
+                    <span className="ml-2 font-grotesk text-[12px] font-bold text-amber-800 dark:text-amber-300">
+                      (+{money.format(calculation.urgency_emergency_value)})
+                    </span>
+                    <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400/80">
+                      Aplicado conforme item 2 das Instruções Gerais da CBHPM.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* ── Cálculo do cirurgião ─────────────────────────────────── */}
               <section className="mb-5">

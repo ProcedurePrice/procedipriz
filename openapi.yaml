@@ -341,6 +341,12 @@ components:
           description: Whether an anesthesiologist is required.
         access_route_type:
           $ref: '#/components/schemas/AccessRouteType'
+        urgency_emergency:
+          type: boolean
+          description: >
+            When true, applies the CBHPM item 2 urgency/emergency 30% surcharge
+            to all medical fees (surgeon, auxiliaries, anesthesiologist).
+            Applicable for acts performed 19h–7h, on weekends, or on holidays.
 
     CodeBreakdown:
       type: object
@@ -448,6 +454,17 @@ components:
           type: number
           format: float
           description: Simple sum of all selected code porte values (before discounting). Retained for compatibility.
+        urgency_emergency_applied:
+          type: boolean
+          description: Whether the CBHPM item 2 urgency/emergency surcharge was applied.
+        urgency_emergency_percentage:
+          type: number
+          format: float
+          description: Surcharge percentage (30.0 when applied, 0 otherwise).
+        urgency_emergency_value:
+          type: number
+          format: float
+          description: Absolute monetary value of the surcharge added to the total.
 
     SaveCompositionRequest:
       type: object
@@ -476,6 +493,9 @@ components:
           maximum: 4
         requires_anesthesia:
           type: boolean
+        urgency_emergency:
+          type: boolean
+          description: Persists the CBHPM item 2 urgency/emergency surcharge preference.
 
     SaveCompositionResponse:
       type: object
@@ -514,7 +534,7 @@ components:
 
     CompositionDetail:
       type: object
-      required: [public_id, name, sbn_procedure_name, selected_codes, access_route_type, auxiliaries_count, requires_anesthesia, created_at, updated_at]
+      required: [public_id, name, sbn_procedure_name, selected_codes, access_route_type, auxiliaries_count, requires_anesthesia, urgency_emergency, created_at, updated_at]
       description: Full composition including selected CBHPM codes.
       properties:
         public_id:
@@ -536,6 +556,9 @@ components:
           type: integer
         requires_anesthesia:
           type: boolean
+        urgency_emergency:
+          type: boolean
+          description: Whether the CBHPM item 2 urgency/emergency surcharge is active.
         created_at:
           type: string
           format: date-time

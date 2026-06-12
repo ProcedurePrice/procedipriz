@@ -22,7 +22,7 @@ func TestSingleProcedureNoAux(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "3.14.01.17-1", Description: "Microcirurgia vascular intracraniana", Porte: "14A"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	if result.LeadSurgeonFee != service.PorteValues["14A"] {
 		t.Errorf("surgeon fee: got %.2f, want %.2f", result.LeadSurgeonFee, service.PorteValues["14A"])
@@ -52,7 +52,7 @@ func TestSameRouteTwoCodes(t *testing.T) {
 		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	wantPrincipal := service.PorteValues["14A"] // 5768.81
 	wantAdditional := service.PorteValues["11B"] // 2588.21
@@ -95,7 +95,7 @@ func TestSameRouteThreeCodes(t *testing.T) {
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 		{CBHPMCode: "C", Description: "Proc C", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	p := service.PorteValues["14C"]
 	s1 := service.PorteValues["11B"]
@@ -118,7 +118,7 @@ func TestDifferentRouteTwoCodes(t *testing.T) {
 		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteDifferent)
+	result := service.Calculate(codes, 0, false, models.AccessRouteDifferent, false)
 
 	wantPrincipal := service.PorteValues["14A"]
 	wantAdditional := service.PorteValues["11B"]
@@ -139,7 +139,7 @@ func TestDifferentRouteThreeCodes(t *testing.T) {
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 		{CBHPMCode: "C", Description: "Proc C", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteDifferent)
+	result := service.Calculate(codes, 0, false, models.AccessRouteDifferent, false)
 
 	p := service.PorteValues["14C"]
 	s1 := service.PorteValues["11B"]
@@ -159,7 +159,7 @@ func TestPrincipalSelectionPicksMaxValue(t *testing.T) {
 		{CBHPMCode: "A", Description: "Low",  Porte: "2B"},
 		{CBHPMCode: "B", Description: "High", Porte: "14C"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	for _, cb := range result.CodeBreakdown {
 		if cb.CBHPMCode == "B" && !cb.IsPrincipal {
@@ -181,7 +181,7 @@ func TestAuxiliaryFeesSingleAux(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 1, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 1, false, models.AccessRouteSame, false)
 
 	surgeonFee := service.PorteValues["7A"]
 	want1stAux := surgeonFee * 0.60
@@ -205,7 +205,7 @@ func TestAuxiliaryFeesFourAux(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 4, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 4, false, models.AccessRouteSame, false)
 
 	base := service.PorteValues["7A"]
 	wantPcts := []float64{60.0, 40.0, 30.0, 30.0}
@@ -235,7 +235,7 @@ func TestAuxiliaryFeesAppliedToSurgeonTotal(t *testing.T) {
 		{CBHPMCode: "A", Description: "High", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Low",  Porte: "7A"},
 	}
-	result := service.Calculate(codes, 1, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 1, false, models.AccessRouteSame, false)
 
 	surgeonTotal := service.PorteValues["14A"] + 0.50*service.PorteValues["7A"]
 	want1stAux := surgeonTotal * 0.60
@@ -255,8 +255,8 @@ func TestAnesthesiaFee(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
 	}
-	withAnesth := service.Calculate(codes, 0, true, models.AccessRouteSame)
-	without := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	withAnesth := service.Calculate(codes, 0, true, models.AccessRouteSame, false)
+	without := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	diff := withAnesth.FinalTotal - without.FinalTotal
 	if round2(diff) != 1200.00 {
@@ -278,7 +278,7 @@ func TestFinalTotalConsistency(t *testing.T) {
 		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 	}
-	result := service.Calculate(codes, 3, true, models.AccessRouteDifferent)
+	result := service.Calculate(codes, 3, true, models.AccessRouteDifferent, false)
 
 	want := result.LeadSurgeonFee + result.AuxiliariesFee + result.AnesthesiologistFee
 	if round2(result.FinalTotal) != round2(want) {
@@ -291,7 +291,7 @@ func TestAuxiliariesFeeIsSum(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 4, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 4, false, models.AccessRouteSame, false)
 
 	sum := 0.0
 	for _, af := range result.IndividualAuxFees {
@@ -308,7 +308,7 @@ func TestTotalBaseIsSimpleSum(t *testing.T) {
 		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Proc B", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	want := service.PorteValues["14A"] + service.PorteValues["7A"]
 	if round2(result.TotalBase) != round2(want) {
@@ -323,8 +323,8 @@ func TestSameVsDifferentRouteProducesHigherFeeForDifferent(t *testing.T) {
 		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
 		{CBHPMCode: "B", Description: "Proc B", Porte: "11B"},
 	}
-	same := service.Calculate(codes, 0, false, models.AccessRouteSame)
-	diff := service.Calculate(codes, 0, false, models.AccessRouteDifferent)
+	same := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
+	diff := service.Calculate(codes, 0, false, models.AccessRouteDifferent, false)
 
 	if diff.LeadSurgeonFee <= same.LeadSurgeonFee {
 		t.Errorf(
@@ -339,7 +339,7 @@ func TestNoAuxProducesEmptyAuxSlice(t *testing.T) {
 	codes := []models.SelectedCode{
 		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
 	}
-	result := service.Calculate(codes, 0, false, models.AccessRouteSame)
+	result := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
 
 	if result.IndividualAuxFees == nil {
 		t.Error("IndividualAuxFees should be an empty slice, not nil")
@@ -349,5 +349,126 @@ func TestNoAuxProducesEmptyAuxSlice(t *testing.T) {
 	}
 	if result.AuxiliariesFee != 0 {
 		t.Errorf("auxiliaries_fee should be 0, got %.2f", result.AuxiliariesFee)
+	}
+}
+
+// ── Urgency/emergency surcharge tests (CBHPM item 2) ─────────────────────────
+
+// TestUrgencyEmergencyNotAppliedByDefault verifies the surcharge flag is false
+// and totals are unchanged when urgencyEmergency=false.
+func TestUrgencyEmergencyNotAppliedByDefault(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
+	}
+	without := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
+	withFalse := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
+
+	if withFalse.UrgencyEmergencyApplied {
+		t.Error("urgency_emergency_applied should be false when flag is false")
+	}
+	if withFalse.UrgencyEmergencyValue != 0 {
+		t.Errorf("urgency_emergency_value should be 0, got %.2f", withFalse.UrgencyEmergencyValue)
+	}
+	if round2(withFalse.FinalTotal) != round2(without.FinalTotal) {
+		t.Errorf("totals should be equal without surcharge: %.2f vs %.2f", withFalse.FinalTotal, without.FinalTotal)
+	}
+}
+
+// TestUrgencyEmergencySurgeonValue verifies the surgeon fee is multiplied by 1.30.
+func TestUrgencyEmergencySurgeonValue(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 0, false, models.AccessRouteSame, true)
+
+	wantSurgeon := round2(base.LeadSurgeonFee * 1.30)
+	if round2(withUE.LeadSurgeonFee) != wantSurgeon {
+		t.Errorf("surgeon fee with UE: got %.2f, want %.2f", withUE.LeadSurgeonFee, wantSurgeon)
+	}
+}
+
+// TestUrgencyEmergencyAuxValue verifies each auxiliary fee is multiplied by 1.30.
+func TestUrgencyEmergencyAuxValue(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 2, false, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 2, false, models.AccessRouteSame, true)
+
+	wantAux := round2(base.AuxiliariesFee * 1.30)
+	if round2(withUE.AuxiliariesFee) != wantAux {
+		t.Errorf("auxiliaries fee with UE: got %.2f, want %.2f", withUE.AuxiliariesFee, wantAux)
+	}
+	for i, af := range withUE.IndividualAuxFees {
+		wantFee := round2(base.IndividualAuxFees[i].Fee * 1.30)
+		if round2(af.Fee) != wantFee {
+			t.Errorf("aux[%d] fee with UE: got %.2f, want %.2f", i, af.Fee, wantFee)
+		}
+	}
+}
+
+// TestUrgencyEmergencyAnesthValue verifies the anesthesiologist fee is multiplied by 1.30.
+func TestUrgencyEmergencyAnesthValue(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 0, true, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 0, true, models.AccessRouteSame, true)
+
+	wantAnesth := round2(base.AnesthesiologistFee * 1.30)
+	if round2(withUE.AnesthesiologistFee) != wantAnesth {
+		t.Errorf("anesthesiologist fee with UE: got %.2f, want %.2f", withUE.AnesthesiologistFee, wantAnesth)
+	}
+}
+
+// TestUrgencyEmergencyFinalTotal verifies final_total = base_total * 1.30.
+func TestUrgencyEmergencyFinalTotal(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
+		{CBHPMCode: "B", Description: "Proc B", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 2, true, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 2, true, models.AccessRouteSame, true)
+
+	wantTotal := round2(base.FinalTotal * 1.30)
+	if round2(withUE.FinalTotal) != wantTotal {
+		t.Errorf("final_total with UE: got %.2f, want %.2f", withUE.FinalTotal, wantTotal)
+	}
+}
+
+// TestUrgencyEmergencyValueField verifies urgency_emergency_value = base_total * 0.30.
+func TestUrgencyEmergencyValueField(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 1, true, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 1, true, models.AccessRouteSame, true)
+
+	wantUEValue := round2(base.FinalTotal * 0.30)
+	if round2(withUE.UrgencyEmergencyValue) != wantUEValue {
+		t.Errorf("urgency_emergency_value: got %.2f, want %.2f", withUE.UrgencyEmergencyValue, wantUEValue)
+	}
+	if withUE.UrgencyEmergencyApplied != true {
+		t.Error("urgency_emergency_applied should be true")
+	}
+	if withUE.UrgencyEmergencyPercentage != 30.0 {
+		t.Errorf("urgency_emergency_percentage: got %.1f, want 30.0", withUE.UrgencyEmergencyPercentage)
+	}
+}
+
+// TestUrgencyEmergencyBaseSurgeonBreakdownUnchanged verifies the surgeon_breakdown
+// (base CBHPM calculation) is not modified by the surcharge.
+func TestUrgencyEmergencyBaseSurgeonBreakdownUnchanged(t *testing.T) {
+	codes := []models.SelectedCode{
+		{CBHPMCode: "A", Description: "Proc A", Porte: "14A"},
+		{CBHPMCode: "B", Description: "Proc B", Porte: "7A"},
+	}
+	base := service.Calculate(codes, 0, false, models.AccessRouteSame, false)
+	withUE := service.Calculate(codes, 0, false, models.AccessRouteSame, true)
+
+	if round2(withUE.SurgeonBreakdown.SurgeonTotal) != round2(base.SurgeonBreakdown.SurgeonTotal) {
+		t.Errorf("surgeon_breakdown.surgeon_total should be unaffected by UE surcharge: got %.2f, want %.2f",
+			withUE.SurgeonBreakdown.SurgeonTotal, base.SurgeonBreakdown.SurgeonTotal)
 	}
 }

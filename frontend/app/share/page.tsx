@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Check, Copy, Info, Printer } from "lucide-react";
+import { Activity, AlertCircle, Check, Copy, Info, Printer } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -44,6 +44,9 @@ type CalculationResult = {
   anesthesiologist_fee: number;
   final_total: number;
   total_base: number;
+  urgency_emergency_applied: boolean;
+  urgency_emergency_percentage: number;
+  urgency_emergency_value: number;
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -222,6 +225,7 @@ function ShareContent() {
   const requiresAnesthesia = searchParams.get("an") === "1";
   const rawRoute = searchParams.get("route");
   const accessRoute: AccessRouteType = rawRoute === "different" ? "different" : "same";
+  const urgencyEmergency = searchParams.get("ue") === "1";
 
   const [procedure, setProcedure] = useState<ProcedureDetail | null>(null);
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
@@ -266,6 +270,7 @@ function ShareContent() {
             auxiliaries_count: auxiliariesCount,
             requires_anesthesia: requiresAnesthesia,
             access_route_type: accessRoute,
+            urgency_emergency: urgencyEmergency,
           }),
         });
         if (!calcRes.ok) throw new Error("Erro ao realizar o cálculo.");
@@ -341,6 +346,14 @@ function ShareContent() {
             value={requiresAnesthesia ? "Incluso" : "Não incluso"}
           />
         </div>
+        {calculation.urgency_emergency_applied && (
+          <div className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3.5 py-2 ring-1 ring-amber-200/80">
+            <AlertCircle size={13} className="shrink-0 text-amber-500" aria-hidden="true" />
+            <span className="text-[11px] font-semibold text-amber-700">
+              Urgência / Emergência — acréscimo de +{calculation.urgency_emergency_percentage.toFixed(0)}% aplicado
+            </span>
+          </div>
+        )}
       </ReportSection>
 
       {/* ── 2. Composição CBHPM ──────────────────────────────── */}
@@ -446,6 +459,14 @@ function ShareContent() {
         <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-slate-400">
           Total da Equipe
         </p>
+        {calculation.urgency_emergency_applied && (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 ring-1 ring-amber-400/30">
+            <AlertCircle size={11} className="shrink-0 text-amber-400" aria-hidden="true" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+              Urgência / Emergência +{calculation.urgency_emergency_percentage.toFixed(0)}%
+            </span>
+          </div>
+        )}
         <p className="mt-4 font-grotesk text-[42px] font-bold leading-none tracking-tight text-white sm:text-[50px]">
           {money.format(calculation.final_total)}
         </p>
@@ -456,6 +477,9 @@ function ShareContent() {
           )}
           {calculation.anesthesiologist_fee > 0 && (
             <SummaryPill label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
+          )}
+          {calculation.urgency_emergency_applied && (
+            <SummaryPill label="Acréscimo UE" value={money.format(calculation.urgency_emergency_value)} />
           )}
         </div>
         <p className="mt-7 text-[10px] leading-relaxed tracking-wide text-slate-500">
@@ -479,7 +503,15 @@ function ShareContent() {
           {calculation.anesthesiologist_fee > 0 && (
             <MetaField label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
           )}
+          {calculation.urgency_emergency_applied && (
+            <MetaField label="Acréscimo UE" value={`+${money.format(calculation.urgency_emergency_value)}`} />
+          )}
         </div>
+        {calculation.urgency_emergency_applied && (
+          <p className="mt-3 text-[10px] font-semibold text-amber-600">
+            Urgência / Emergência +{calculation.urgency_emergency_percentage.toFixed(0)}% · Item 2 das Instruções Gerais da CBHPM
+          </p>
+        )}
         <p className="mt-5 text-[10px] text-slate-400">{accessRuleLabel}</p>
       </section>
 
@@ -562,6 +594,23 @@ function ShareContent() {
             )}
           </ExplainBlock>
 
+          {/* Urgência / Emergência */}
+          {calculation.urgency_emergency_applied && (
+            <ExplainBlock title="Urgência / Emergência">
+              <p>
+                Acréscimo de{" "}
+                <strong className="text-amber-700">+{calculation.urgency_emergency_percentage.toFixed(0)}%</strong>{" "}
+                aplicado sobre os honorários de cirurgião, auxiliares e anestesiologista, conforme{" "}
+                <strong className="text-slate-700">item 2 das Instruções Gerais da CBHPM</strong>{" "}
+                (atos realizados entre 19h e 7h, finais de semana ou feriados).
+              </p>
+              <p>
+                Valor do acréscimo:{" "}
+                <strong className="font-grotesk text-amber-700">{money.format(calculation.urgency_emergency_value)}</strong>.
+              </p>
+            </ExplainBlock>
+          )}
+
           {/* Total da equipe */}
           <ExplainBlock title="Total da equipe">
             <p>
@@ -575,6 +624,10 @@ function ShareContent() {
                 <> e anestesiologista (
                   <strong className="font-grotesk text-slate-700">{money.format(calculation.anesthesiologist_fee)}</strong>
                   )</>
+              )}{calculation.urgency_emergency_applied && (
+                <>, incluindo acréscimo de urgência/emergência de{" "}
+                  <strong className="font-grotesk text-amber-700">{money.format(calculation.urgency_emergency_value)}</strong>
+                </>
               )}{" "}
               = <strong className="font-grotesk text-slate-700">{money.format(calculation.final_total)}</strong>.
             </p>

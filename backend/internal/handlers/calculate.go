@@ -48,7 +48,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accessRoute := models.AccessRouteType(req.AccessRouteType)
-	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia, accessRoute)
+	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia, accessRoute, req.UrgencyEmergency)
 
 	breakdown := make([]generated.CodeBreakdown, 0, len(result.CodeBreakdown))
 	for _, b := range result.CodeBreakdown {
@@ -80,11 +80,14 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 			AdditionalDiscounted: result.SurgeonBreakdown.AdditionalDiscounted,
 			SurgeonTotal:         result.SurgeonBreakdown.SurgeonTotal,
 		},
-		LeadSurgeonFee:      result.LeadSurgeonFee,
-		IndividualAuxFees:   auxFees,
-		AuxiliariesFee:      result.AuxiliariesFee,
-		AnesthesiologistFee: result.AnesthesiologistFee,
-		FinalTotal:          result.FinalTotal,
-		TotalBase:           result.TotalBase,
+		LeadSurgeonFee:             result.LeadSurgeonFee,
+		IndividualAuxFees:          auxFees,
+		AuxiliariesFee:             result.AuxiliariesFee,
+		AnesthesiologistFee:        result.AnesthesiologistFee,
+		FinalTotal:                 result.FinalTotal,
+		TotalBase:                  result.TotalBase,
+		UrgencyEmergencyApplied:    result.UrgencyEmergencyApplied,
+		UrgencyEmergencyPercentage: result.UrgencyEmergencyPercentage,
+		UrgencyEmergencyValue:      result.UrgencyEmergencyValue,
 	})
 }

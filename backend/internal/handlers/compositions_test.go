@@ -240,6 +240,49 @@ func TestUserCannotAccessOtherUserComposition(t *testing.T) {
 	}
 }
 
+// TestCompositionPreservesUrgencyEmergency verifies that the urgency_emergency
+// flag is persisted on save and returned correctly on GET.
+func TestCompositionPreservesUrgencyEmergency(t *testing.T) {
+	repo := repository.NewFileRepository()
+	mux := testMux(repo, "user-ue-test")
+
+	req := generated.SaveCompositionRequest{
+		Name:               "Urgência noturna",
+		SBNProcedureName:   "CRANIOTOMIA DESCOMPRESSIVA",
+		SBNProcedureID:     "test-sbn-id",
+		SelectedCodes:      []generated.SelectedCode{{CBHPMCode: "3.02.15.02-1", Description: "Craniotomia", Porte: "9C"}},
+		AccessRouteType:    generated.AccessRouteSame,
+		AuxiliariesCount:   1,
+		RequiresAnesthesia: true,
+		UrgencyEmergency:   true,
+	}
+	body, _ := json.Marshal(req)
+	id := saveComposition(t, mux, body)
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/compositions/"+id, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body)
+	}
+	var detail generated.CompositionDetail
+	if err := json.NewDecoder(w.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if !detail.UrgencyEmergency {
+		t.Error("urgency_emergency should be true after save/load")
+	}
+
+	// Also verify that a composition saved without the flag returns false.
+	id2 := saveComposition(t, mux, compositionPayload("Sem urgência"))
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/api/compositions/"+id2, nil))
+	var detail2 generated.CompositionDetail
+	json.NewDecoder(w2.Body).Decode(&detail2) //nolint:errcheck
+	if detail2.UrgencyEmergency {
+		t.Error("urgency_emergency should be false for a normal composition")
+	}
+}
+
 func TestPublicCalculationsDoNotRequireAuth(t *testing.T) {
 	repo := repository.NewFileRepository()
 	// Real Clerk middleware with no JWKS: unauthenticated requests to calculation

@@ -60,6 +60,7 @@ func reqToComposition(req generated.SaveCompositionRequest) models.Composition {
 		AccessRouteType:    models.AccessRouteType(req.AccessRouteType),
 		AuxiliariesCount:   req.AuxiliariesCount,
 		RequiresAnesthesia: req.RequiresAnesthesia,
+		UrgencyEmergency:   req.UrgencyEmergency,
 	}
 }
 
@@ -171,6 +172,7 @@ func makeGetCompositionHandler(repo repository.Repository) http.HandlerFunc {
 			AccessRouteType:    generated.AccessRouteType(comp.AccessRouteType),
 			AuxiliariesCount:   comp.AuxiliariesCount,
 			RequiresAnesthesia: comp.RequiresAnesthesia,
+			UrgencyEmergency:   comp.UrgencyEmergency,
 			CreatedAt:          comp.CreatedAt,
 			UpdatedAt:          comp.UpdatedAt,
 		})
@@ -220,6 +222,7 @@ func makeUpdateCompositionHandler(repo repository.Repository) http.HandlerFunc {
 			AccessRouteType:    generated.AccessRouteType(updated.AccessRouteType),
 			AuxiliariesCount:   updated.AuxiliariesCount,
 			RequiresAnesthesia: updated.RequiresAnesthesia,
+			UrgencyEmergency:   updated.UrgencyEmergency,
 			CreatedAt:          updated.CreatedAt,
 			UpdatedAt:          updated.UpdatedAt,
 		})
