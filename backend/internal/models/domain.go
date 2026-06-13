@@ -74,21 +74,44 @@ type AuxiliaryFee struct {
 	Fee        float64
 }
 
+// AppliedAdjustment is one CBHPM percentage adjustment applied to a calculation.
+// Adjustments are additive and sourced from CBHPM 2022 General Instructions.
+type AppliedAdjustment struct {
+	Code       string
+	Label      string
+	Percentage float64
+	Source     string
+}
+
 // CalculationResult is the full output of the valuation engine.
+//
+// The base values reflect the CBHPM composition before any percentage adjustments.
+// The final values (LeadSurgeonFee, AuxiliariesFee, AnesthesiologistFee, FinalTotal)
+// are the base values scaled by (1 + TotalAdjustmentPercentage/100). When no adjustments
+// are selected the base and final values are identical.
 type CalculationResult struct {
-	CodeBreakdown       []CodeBreakdown
-	AccessRouteType     AccessRouteType
-	SurgeonBreakdown    SurgeonBreakdown
+	CodeBreakdown    []CodeBreakdown
+	AccessRouteType  AccessRouteType
+	SurgeonBreakdown SurgeonBreakdown
+	TotalBase        float64
+
+	// Base medical remuneration — pre-adjustment CBHPM values.
+	BaseSurgeonValue          float64
+	BaseAuxiliaresTotalValue  float64
+	BaseAnesthesiologistValue float64
+	BaseTeamTotalValue        float64
+
+	// Adjustment summary — CBHPM percentages applied additively (not multiplicatively).
+	SelectedAdjustments       []AppliedAdjustment
+	TotalAdjustmentPercentage float64
+	AdjustmentValue           float64 // absolute monetary value of all combined adjustments
+
+	// Final (adjusted) values — equal to base values when no adjustments apply.
 	LeadSurgeonFee      float64
 	IndividualAuxFees   []AuxiliaryFee
 	AuxiliariesFee      float64
 	AnesthesiologistFee float64
 	FinalTotal          float64
-	TotalBase           float64
-	// CBHPM item 2 urgency/emergency surcharge (30% on all medical fees).
-	UrgencyEmergencyApplied    bool
-	UrgencyEmergencyPercentage float64 // 30.0 when applied
-	UrgencyEmergencyValue      float64 // absolute value of the surcharge
 }
 
 // Calculation is a persisted valuation record.
@@ -141,8 +164,9 @@ type PhysicianAccount struct {
 
 // Composition is a reusable surgical template created by the physician.
 // It captures the procedural setup — SBN procedure, selected CBHPM codes,
-// access route, anesthesia, and auxiliary count — without storing any
-// financial values. Values are always recalculated fresh when executed.
+// access route, anesthesia, auxiliary count, and CBHPM adjustment codes —
+// without storing any financial values. Values are always recalculated fresh
+// when executed.
 type Composition struct {
 	ID                 string
 	PublicID           string
@@ -154,10 +178,11 @@ type Composition struct {
 	AccessRouteType    AccessRouteType
 	AuxiliariesCount   int
 	RequiresAnesthesia bool
-	// UrgencyEmergency signals CBHPM item 2 — 30% surcharge on medical fees.
-	UrgencyEmergency bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Adjustments holds selected CBHPM adjustment codes (e.g. "emergency_special_hours").
+	// See service.AdjustmentCatalog for valid codes and their percentages.
+	Adjustments []string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // CompositionSummary is the lightweight projection for list responses.

@@ -57,7 +57,10 @@ type CalculateRequest struct {
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
-	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
+	// Adjustments holds selected CBHPM adjustment codes applied additively.
+	// Valid codes: emergency_special_hours, pediatric_low_weight_or_premature,
+	// pediatric_neonate_or_infant, pediatric_child_under_12.
+	Adjustments []string `json:"adjustments,omitempty"`
 }
 
 // CodeBreakdown is the per-code contribution in the calculation result.
@@ -70,6 +73,7 @@ type CodeBreakdown struct {
 }
 
 // SurgeonBreakdown shows the step-by-step CBHPM 4.1/4.2 composition for the lead surgeon fee.
+// surgeon_total is always the pre-adjustment value, preserving the CBHPM audit trail.
 type SurgeonBreakdown struct {
 	PrincipalValue       float64 `json:"principal_value"`
 	AdditionalGross      float64 `json:"additional_gross"`
@@ -85,21 +89,43 @@ type AuxiliaryFee struct {
 	Fee        float64 `json:"fee"`
 }
 
+// AppliedAdjustment is one CBHPM percentage adjustment included in a calculation.
+type AppliedAdjustment struct {
+	Code       string  `json:"code"`
+	Label      string  `json:"label"`
+	Percentage float64 `json:"percentage"`
+	Source     string  `json:"source"`
+}
+
 // CalculateResponse is returned by POST /api/calculate.
+//
+// Base values reflect pre-adjustment CBHPM medical remuneration.
+// The final values (lead_surgeon_fee, auxiliaries_fee, anesthesiologist_fee, final_total)
+// equal base values × (1 + total_adjustment_percentage/100). When adjustments is empty
+// base and final values are identical.
 type CalculateResponse struct {
-	CodeBreakdown       []CodeBreakdown  `json:"code_breakdown"`
-	AccessRouteType     AccessRouteType  `json:"access_route_type"`
-	SurgeonBreakdown    SurgeonBreakdown `json:"surgeon_breakdown"`
-	LeadSurgeonFee      float64          `json:"lead_surgeon_fee"`
-	IndividualAuxFees   []AuxiliaryFee   `json:"individual_auxiliary_fees"`
-	AuxiliariesFee      float64          `json:"auxiliaries_fee"`
-	AnesthesiologistFee float64          `json:"anesthesiologist_fee"`
-	FinalTotal          float64          `json:"final_total"`
-	TotalBase           float64          `json:"total_base"`
-	// CBHPM item 2 urgency/emergency surcharge fields.
-	UrgencyEmergencyApplied    bool    `json:"urgency_emergency_applied"`
-	UrgencyEmergencyPercentage float64 `json:"urgency_emergency_percentage"`
-	UrgencyEmergencyValue      float64 `json:"urgency_emergency_value"`
+	CodeBreakdown    []CodeBreakdown  `json:"code_breakdown"`
+	AccessRouteType  AccessRouteType  `json:"access_route_type"`
+	SurgeonBreakdown SurgeonBreakdown `json:"surgeon_breakdown"`
+	TotalBase        float64          `json:"total_base"`
+
+	// Base medical remuneration (pre-adjustment).
+	BaseSurgeonValue          float64 `json:"base_surgeon_value"`
+	BaseAuxiliaresTotalValue  float64 `json:"base_auxiliaries_total_value"`
+	BaseAnesthesiologistValue float64 `json:"base_anesthesiologist_value"`
+	BaseTeamTotalValue        float64 `json:"base_team_total_value"`
+
+	// Adjustment summary.
+	SelectedAdjustments       []AppliedAdjustment `json:"selected_adjustments"`
+	TotalAdjustmentPercentage float64             `json:"total_adjustment_percentage"`
+	AdjustmentValue           float64             `json:"adjustment_value"`
+
+	// Final (adjusted) values.
+	LeadSurgeonFee      float64        `json:"lead_surgeon_fee"`
+	IndividualAuxFees   []AuxiliaryFee `json:"individual_auxiliary_fees"`
+	AuxiliariesFee      float64        `json:"auxiliaries_fee"`
+	AnesthesiologistFee float64        `json:"anesthesiologist_fee"`
+	FinalTotal          float64        `json:"final_total"`
 }
 
 // ─── Composition types (primary persistence model) ───────────────────────────
@@ -113,7 +139,7 @@ type SaveCompositionRequest struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
-	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
+	Adjustments        []string        `json:"adjustments,omitempty"`
 }
 
 // UpdateCompositionRequest is the body for PUT /api/compositions/{id}.
@@ -125,7 +151,7 @@ type UpdateCompositionRequest struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
-	UrgencyEmergency   bool            `json:"urgency_emergency,omitempty"`
+	Adjustments        []string        `json:"adjustments,omitempty"`
 }
 
 // SaveCompositionResponse is returned by a successful POST /api/compositions.
@@ -156,7 +182,7 @@ type CompositionDetail struct {
 	AccessRouteType    AccessRouteType `json:"access_route_type"`
 	AuxiliariesCount   int             `json:"auxiliaries_count"`
 	RequiresAnesthesia bool            `json:"requires_anesthesia"`
-	UrgencyEmergency   bool            `json:"urgency_emergency"`
+	Adjustments        []string        `json:"adjustments"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
@@ -166,12 +192,12 @@ type CompositionDetail struct {
 // SaveCalculationRequest is the body for POST /api/calculations.
 // calculation_result must be a completed valuation (lead_surgeon_fee > 0).
 type SaveCalculationRequest struct {
-	ProcedureName      string          `json:"procedure_name"`
-	ProcedureSBNCode   string          `json:"procedure_sbn_code,omitempty"`
-	SelectedCodes      []SelectedCode  `json:"selected_codes"`
-	AuxiliariesCount   int             `json:"auxiliaries_count"`
-	RequiresAnesthesia bool            `json:"requires_anesthesia"`
-	AccessRouteType    AccessRouteType `json:"access_route_type"`
+	ProcedureName      string            `json:"procedure_name"`
+	ProcedureSBNCode   string            `json:"procedure_sbn_code,omitempty"`
+	SelectedCodes      []SelectedCode    `json:"selected_codes"`
+	AuxiliariesCount   int               `json:"auxiliaries_count"`
+	RequiresAnesthesia bool              `json:"requires_anesthesia"`
+	AccessRouteType    AccessRouteType   `json:"access_route_type"`
 	CalculationResult  CalculateResponse `json:"calculation_result"`
 }
 

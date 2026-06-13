@@ -240,21 +240,21 @@ func TestUserCannotAccessOtherUserComposition(t *testing.T) {
 	}
 }
 
-// TestCompositionPreservesUrgencyEmergency verifies that the urgency_emergency
-// flag is persisted on save and returned correctly on GET.
-func TestCompositionPreservesUrgencyEmergency(t *testing.T) {
+// TestCompositionPreservesAdjustments verifies that selected adjustment codes are
+// persisted on save and returned correctly on GET.
+func TestCompositionPreservesAdjustments(t *testing.T) {
 	repo := repository.NewFileRepository()
-	mux := testMux(repo, "user-ue-test")
+	mux := testMux(repo, "user-adj-test")
 
 	req := generated.SaveCompositionRequest{
-		Name:               "Urgência noturna",
+		Name:               "Urgência noturna pediátrica",
 		SBNProcedureName:   "CRANIOTOMIA DESCOMPRESSIVA",
 		SBNProcedureID:     "test-sbn-id",
 		SelectedCodes:      []generated.SelectedCode{{CBHPMCode: "3.02.15.02-1", Description: "Craniotomia", Porte: "9C"}},
 		AccessRouteType:    generated.AccessRouteSame,
 		AuxiliariesCount:   1,
 		RequiresAnesthesia: true,
-		UrgencyEmergency:   true,
+		Adjustments:        []string{"emergency_special_hours", "pediatric_child_under_12"},
 	}
 	body, _ := json.Marshal(req)
 	id := saveComposition(t, mux, body)
@@ -268,18 +268,31 @@ func TestCompositionPreservesUrgencyEmergency(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&detail); err != nil {
 		t.Fatalf("decode detail: %v", err)
 	}
-	if !detail.UrgencyEmergency {
-		t.Error("urgency_emergency should be true after save/load")
+	if len(detail.Adjustments) != 2 {
+		t.Errorf("expected 2 adjustments, got %d: %v", len(detail.Adjustments), detail.Adjustments)
+	}
+	adjSet := make(map[string]bool)
+	for _, a := range detail.Adjustments {
+		adjSet[a] = true
+	}
+	if !adjSet["emergency_special_hours"] {
+		t.Error("emergency_special_hours should be in adjustments")
+	}
+	if !adjSet["pediatric_child_under_12"] {
+		t.Error("pediatric_child_under_12 should be in adjustments")
 	}
 
-	// Also verify that a composition saved without the flag returns false.
-	id2 := saveComposition(t, mux, compositionPayload("Sem urgência"))
+	// A composition saved without adjustments must return an empty array (not null).
+	id2 := saveComposition(t, mux, compositionPayload("Sem acréscimos"))
 	w2 := httptest.NewRecorder()
 	mux.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/api/compositions/"+id2, nil))
 	var detail2 generated.CompositionDetail
 	json.NewDecoder(w2.Body).Decode(&detail2) //nolint:errcheck
-	if detail2.UrgencyEmergency {
-		t.Error("urgency_emergency should be false for a normal composition")
+	if detail2.Adjustments == nil {
+		t.Error("adjustments should be an empty array, not null, for a composition without adjustments")
+	}
+	if len(detail2.Adjustments) != 0 {
+		t.Errorf("expected 0 adjustments for normal composition, got %d", len(detail2.Adjustments))
 	}
 }
 

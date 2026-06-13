@@ -52,6 +52,10 @@ func reqToComposition(req generated.SaveCompositionRequest) models.Composition {
 			Porte:       c.Porte,
 		})
 	}
+	adjs := req.Adjustments
+	if adjs == nil {
+		adjs = []string{}
+	}
 	return models.Composition{
 		Name:               req.Name,
 		SBNProcedureID:     req.SBNProcedureID,
@@ -60,7 +64,7 @@ func reqToComposition(req generated.SaveCompositionRequest) models.Composition {
 		AccessRouteType:    models.AccessRouteType(req.AccessRouteType),
 		AuxiliariesCount:   req.AuxiliariesCount,
 		RequiresAnesthesia: req.RequiresAnesthesia,
-		UrgencyEmergency:   req.UrgencyEmergency,
+		Adjustments:        adjs,
 	}
 }
 
@@ -172,7 +176,7 @@ func makeGetCompositionHandler(repo repository.Repository) http.HandlerFunc {
 			AccessRouteType:    generated.AccessRouteType(comp.AccessRouteType),
 			AuxiliariesCount:   comp.AuxiliariesCount,
 			RequiresAnesthesia: comp.RequiresAnesthesia,
-			UrgencyEmergency:   comp.UrgencyEmergency,
+			Adjustments:        func() []string { if comp.Adjustments == nil { return []string{} }; return comp.Adjustments }(),
 			CreatedAt:          comp.CreatedAt,
 			UpdatedAt:          comp.UpdatedAt,
 		})
@@ -213,19 +217,23 @@ func makeUpdateCompositionHandler(repo repository.Repository) http.HandlerFunc {
 				Porte:       c.Porte,
 			})
 		}
-		respondJSON(w, http.StatusOK, generated.CompositionDetail{
-			PublicID:           updated.PublicID,
-			Name:               updated.Name,
-			SBNProcedureID:     updated.SBNProcedureID,
-			SBNProcedureName:   updated.SBNProcedureName,
-			SelectedCodes:      codes,
-			AccessRouteType:    generated.AccessRouteType(updated.AccessRouteType),
-			AuxiliariesCount:   updated.AuxiliariesCount,
-			RequiresAnesthesia: updated.RequiresAnesthesia,
-			UrgencyEmergency:   updated.UrgencyEmergency,
-			CreatedAt:          updated.CreatedAt,
-			UpdatedAt:          updated.UpdatedAt,
-		})
+		updAdjs := updated.Adjustments
+			if updAdjs == nil {
+				updAdjs = []string{}
+			}
+			respondJSON(w, http.StatusOK, generated.CompositionDetail{
+				PublicID:           updated.PublicID,
+				Name:               updated.Name,
+				SBNProcedureID:     updated.SBNProcedureID,
+				SBNProcedureName:   updated.SBNProcedureName,
+				SelectedCodes:      codes,
+				AccessRouteType:    generated.AccessRouteType(updated.AccessRouteType),
+				AuxiliariesCount:   updated.AuxiliariesCount,
+				RequiresAnesthesia: updated.RequiresAnesthesia,
+				Adjustments:        updAdjs,
+				CreatedAt:          updated.CreatedAt,
+				UpdatedAt:          updated.UpdatedAt,
+			})
 	}
 }
 

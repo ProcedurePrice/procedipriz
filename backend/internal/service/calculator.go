@@ -56,9 +56,45 @@ var PorteValues = map[string]float64{
 	"14C": 6922.36,
 }
 
-// urgencyRate is the CBHPM item 2 surcharge applied to medical acts in urgency/emergency
-// special hours (19h–7h, weekends, holidays).
-const urgencyRate = 0.30
+// Adjustment codes — valid values for the adjustments parameter.
+const (
+	AdjCodeEmergencySpecialHours         = "emergency_special_hours"
+	AdjCodePediatricLowWeightOrPremature = "pediatric_low_weight_or_premature"
+	AdjCodePediatricNeonateOrInfant      = "pediatric_neonate_or_infant"
+	AdjCodePediatricChildUnder12         = "pediatric_child_under_12"
+)
+
+type adjMeta struct {
+	label      string
+	percentage float64
+	source     string
+}
+
+// AdjustmentCatalog maps each valid adjustment code to its display metadata and percentage.
+// Percentages are additive — two adjustments of 30% each sum to 60%, not 69% (1.3×1.3).
+// Source: CBHPM 2022 Instruções Gerais.
+var AdjustmentCatalog = map[string]adjMeta{
+	AdjCodeEmergencySpecialHours: {
+		label:      "Urgência/emergência em horário especial",
+		percentage: 30.0,
+		source:     "CBHPM 2022, Instruções Gerais, item 2",
+	},
+	AdjCodePediatricLowWeightOrPremature: {
+		label:      "Criança < 2.500 g ou prematura < 37 semanas",
+		percentage: 100.0,
+		source:     "CBHPM 2022, Instruções Gerais, item 3",
+	},
+	AdjCodePediatricNeonateOrInfant: {
+		label:      "Neonato/lactente — 0 a 24 meses",
+		percentage: 50.0,
+		source:     "CBHPM 2022, Instruções Gerais, item 3",
+	},
+	AdjCodePediatricChildUnder12: {
+		label:      "Pediátrico — 24 meses completos a 12 anos incompletos",
+		percentage: 30.0,
+		source:     "CBHPM 2022, Instruções Gerais, item 3",
+	},
+}
 
 // Calculate applies the validated CBHPM billing rules to a physician-assembled composition.
 //
@@ -73,15 +109,20 @@ const urgencyRate = 0.30
 //   - 3rd auxiliary: 30% of surgeon total.
 //   - 4th auxiliary: 30% of surgeon total.
 //
-// Urgency/emergency surcharge (CBHPM 2022, item 2):
-//   When urgencyEmergency is true all medical fees (surgeon, auxiliaries, anesthesiologist)
-//   are increased by 30%. The surcharge is itemised in the result for auditability.
+// CBHPM adjustments (Instruções Gerais):
+//   - adjustments holds selected codes from AdjustmentCatalog.
+//   - Percentages are summed additively; the total is applied as a single multiplier.
+//   - Example: emergency (+30%) + pediatric child (+30%) = multiplier 1.60.
+//   - Applies to surgeon, auxiliary, and anesthesiologist fees.
+//   - surgeon_breakdown.surgeon_total always reflects the base CBHPM value (pre-adjustment)
+//     for auditability.
+//   - Unknown codes are silently skipped (protects against stale share URLs).
 func Calculate(
 	codes []models.SelectedCode,
 	auxiliariesCount int,
 	requiresAnesthesia bool,
 	accessRoute models.AccessRouteType,
-	urgencyEmergency bool,
+	adjustments []string,
 ) models.CalculationResult {
 	// ── Step 1: resolve porte values and find the principal (highest value) ─────
 
@@ -140,6 +181,7 @@ func Calculate(
 	}
 
 	// ── Step 4: auxiliary fees per CBHPM 5.1 applied to surgeon total (5.2) ──
+	// Base aux fees are always computed from the pre-adjustment surgeon total.
 
 	individualAuxFees := make([]models.AuxiliaryFee, 0, auxiliariesCount)
 	auxTotal := 0.0
@@ -162,53 +204,71 @@ func Calculate(
 		anesth = anesthesiaFee
 	}
 
-	// ── Step 6: urgency/emergency surcharge (CBHPM item 2) ───────────────────
-	// The surgeon_breakdown reflects the base CBHPM calculation without the
-	// surcharge so the rule derivation remains fully auditable. The top-level
-	// fee fields (lead_surgeon_fee, auxiliaries_fee, anesthesiologist_fee,
-	// final_total) include the surcharge when urgencyEmergency is true.
+	// ── Step 6: resolve CBHPM adjustments (additive percentage model) ────────
+	// Percentages are summed first, then applied as a single multiplier so that
+	// emergency(30%) + pediatric(30%) = ×1.60, not ×1.30×1.30.
 
-	var (
-		ueApplied     bool
-		uePct         float64
-		ueValue       float64
-		finalSurgeon  = surgeonTotal
-		finalAuxFees  = individualAuxFees
-		finalAux      = auxTotal
-		finalAnesth   = anesth
-	)
+	applied := make([]models.AppliedAdjustment, 0, len(adjustments))
+	totalAdjPct := 0.0
+	for _, code := range adjustments {
+		meta, ok := AdjustmentCatalog[code]
+		if !ok {
+			continue // silently skip unknown/stale codes
+		}
+		applied = append(applied, models.AppliedAdjustment{
+			Code:       code,
+			Label:      meta.label,
+			Percentage: meta.percentage,
+			Source:     meta.source,
+		})
+		totalAdjPct += meta.percentage
+	}
 
-	if urgencyEmergency {
-		ueApplied = true
-		uePct = urgencyRate * 100
-		ueValue = (surgeonTotal + auxTotal + anesth) * urgencyRate
-		finalSurgeon = surgeonTotal * (1 + urgencyRate)
-		finalAux = auxTotal * (1 + urgencyRate)
-		finalAnesth = anesth * (1 + urgencyRate)
+	multiplier := 1.0 + totalAdjPct/100.0
+
+	// Base values (before any adjustment).
+	baseSurgeon := surgeonTotal
+	baseAux := auxTotal
+	baseAnesth := anesth
+	baseTeam := baseSurgeon + baseAux + baseAnesth
+
+	adjValue := baseTeam * (totalAdjPct / 100.0)
+
+	// Scale individual auxiliary fees when adjustments apply.
+	finalAuxFees := individualAuxFees
+	if totalAdjPct > 0 {
 		scaled := make([]models.AuxiliaryFee, len(individualAuxFees))
 		for i, af := range individualAuxFees {
 			scaled[i] = models.AuxiliaryFee{
 				Position:   af.Position,
 				Percentage: af.Percentage,
-				Fee:        af.Fee * (1 + urgencyRate),
+				Fee:        af.Fee * multiplier,
 			}
 		}
 		finalAuxFees = scaled
 	}
 
+	finalSurgeon := baseSurgeon * multiplier
+	finalAux := baseAux * multiplier
+	finalAnesth := baseAnesth * multiplier
+
 	return models.CalculationResult{
-		CodeBreakdown:              breakdown,
-		AccessRouteType:            accessRoute,
-		SurgeonBreakdown:           surgeonBreakdown,
-		LeadSurgeonFee:             finalSurgeon,
-		IndividualAuxFees:          finalAuxFees,
-		AuxiliariesFee:             finalAux,
-		AnesthesiologistFee:        finalAnesth,
-		FinalTotal:                 finalSurgeon + finalAux + finalAnesth,
-		TotalBase:                  totalBase,
-		UrgencyEmergencyApplied:    ueApplied,
-		UrgencyEmergencyPercentage: uePct,
-		UrgencyEmergencyValue:      ueValue,
+		CodeBreakdown:             breakdown,
+		AccessRouteType:           accessRoute,
+		SurgeonBreakdown:          surgeonBreakdown,
+		TotalBase:                 totalBase,
+		BaseSurgeonValue:          baseSurgeon,
+		BaseAuxiliaresTotalValue:  baseAux,
+		BaseAnesthesiologistValue: baseAnesth,
+		BaseTeamTotalValue:        baseTeam,
+		SelectedAdjustments:       applied,
+		TotalAdjustmentPercentage: totalAdjPct,
+		AdjustmentValue:           adjValue,
+		LeadSurgeonFee:            finalSurgeon,
+		IndividualAuxFees:         finalAuxFees,
+		AuxiliariesFee:            finalAux,
+		AnesthesiologistFee:       finalAnesth,
+		FinalTotal:                finalSurgeon + finalAux + finalAnesth,
 	}
 }
 

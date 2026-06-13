@@ -34,6 +34,13 @@ type CodeBreakdown = {
   is_principal: boolean;
 };
 
+type AppliedAdjustment = {
+  code: string;
+  label: string;
+  percentage: number;
+  source: string;
+};
+
 type CalculationResult = {
   code_breakdown: CodeBreakdown[];
   access_route_type: AccessRouteType;
@@ -44,9 +51,13 @@ type CalculationResult = {
   anesthesiologist_fee: number;
   final_total: number;
   total_base: number;
-  urgency_emergency_applied: boolean;
-  urgency_emergency_percentage: number;
-  urgency_emergency_value: number;
+  base_surgeon_value: number;
+  base_auxiliaries_total_value: number;
+  base_anesthesiologist_value: number;
+  base_team_total_value: number;
+  selected_adjustments: AppliedAdjustment[];
+  total_adjustment_percentage: number;
+  adjustment_value: number;
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -225,7 +236,8 @@ function ShareContent() {
   const requiresAnesthesia = searchParams.get("an") === "1";
   const rawRoute = searchParams.get("route");
   const accessRoute: AccessRouteType = rawRoute === "different" ? "different" : "same";
-  const urgencyEmergency = searchParams.get("ue") === "1";
+  const adjParam = searchParams.get("adj") ?? "";
+  const adjustments = adjParam ? adjParam.split(",").filter(Boolean) : [];
 
   const [procedure, setProcedure] = useState<ProcedureDetail | null>(null);
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
@@ -270,7 +282,7 @@ function ShareContent() {
             auxiliaries_count: auxiliariesCount,
             requires_anesthesia: requiresAnesthesia,
             access_route_type: accessRoute,
-            urgency_emergency: urgencyEmergency,
+            adjustments,
           }),
         });
         if (!calcRes.ok) throw new Error("Erro ao realizar o cálculo.");
@@ -317,6 +329,7 @@ function ShareContent() {
   const hasMultiProcedure = additionalCodes.length > 0;
   const hasAuxiliaries = auxiliariesCount > 0 && calculation.individual_auxiliary_fees.length > 0;
   const hasTeam = hasAuxiliaries || calculation.anesthesiologist_fee > 0;
+  const hasAdjustments = calculation.selected_adjustments.length > 0;
 
   const accessRuleLabel =
     accessRoute === "same"
@@ -346,12 +359,24 @@ function ShareContent() {
             value={requiresAnesthesia ? "Incluso" : "Não incluso"}
           />
         </div>
-        {calculation.urgency_emergency_applied && (
-          <div className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3.5 py-2 ring-1 ring-amber-200/80">
-            <AlertCircle size={13} className="shrink-0 text-amber-500" aria-hidden="true" />
-            <span className="text-[11px] font-semibold text-amber-700">
-              Urgência / Emergência — acréscimo de +{calculation.urgency_emergency_percentage.toFixed(0)}% aplicado
-            </span>
+
+        {/* Acréscimos CBHPM aplicados */}
+        {hasAdjustments && (
+          <div className="mt-6 space-y-2">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Acréscimos CBHPM</p>
+            <div className="inline-block rounded-lg bg-amber-50 px-4 py-3 ring-1 ring-amber-200/80 space-y-1.5">
+              {calculation.selected_adjustments.map((a) => (
+                <div key={a.code} className="flex items-center gap-3">
+                  <AlertCircle size={12} className="shrink-0 text-amber-500" aria-hidden="true" />
+                  <span className="text-[11px] font-semibold text-amber-700">
+                    {a.label} — +{a.percentage.toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+              <p className="pl-[18px] text-[10px] text-amber-600">
+                Total: +{calculation.total_adjustment_percentage.toFixed(0)}% · CBHPM 2022, Instruções Gerais
+              </p>
+            </div>
           </div>
         )}
       </ReportSection>
@@ -421,11 +446,27 @@ function ShareContent() {
               />
               <div className="border-t border-slate-100 pt-2">
                 <BreakdownLine
-                  label="Total cirurgião"
-                  value={money.format(calculation.lead_surgeon_fee)}
+                  label="Base CBHPM cirurgião"
+                  value={money.format(calculation.surgeon_breakdown.surgeon_total)}
                   strong
                 />
               </div>
+              {hasAdjustments && (
+                <>
+                  <BreakdownLine
+                    label={`Acréscimos CBHPM (+${calculation.total_adjustment_percentage.toFixed(0)}%)`}
+                    value={`+${money.format(calculation.adjustment_value)}`}
+                    muted
+                  />
+                  <div className="border-t border-slate-100 pt-2">
+                    <BreakdownLine
+                      label="Total cirurgião (com acréscimos)"
+                      value={money.format(calculation.lead_surgeon_fee)}
+                      strong
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -448,6 +489,12 @@ function ShareContent() {
               <TeamCard role="Anestesiologista" value={calculation.anesthesiologist_fee} />
             )}
           </div>
+          {hasAdjustments && (
+            <p className="mt-4 text-[10px] text-slate-400">
+              Valores já incluem o acréscimo de +{calculation.total_adjustment_percentage.toFixed(0)}% (
+              {calculation.selected_adjustments.map((a) => a.label).join("; ")}).
+            </p>
+          )}
         </ReportSection>
       )}
 
@@ -459,12 +506,19 @@ function ShareContent() {
         <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-slate-400">
           Total da Equipe
         </p>
-        {calculation.urgency_emergency_applied && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 ring-1 ring-amber-400/30">
-            <AlertCircle size={11} className="shrink-0 text-amber-400" aria-hidden="true" />
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
-              Urgência / Emergência +{calculation.urgency_emergency_percentage.toFixed(0)}%
-            </span>
+        {hasAdjustments && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {calculation.selected_adjustments.map((a) => (
+              <div
+                key={a.code}
+                className="inline-flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 ring-1 ring-amber-400/30"
+              >
+                <AlertCircle size={11} className="shrink-0 text-amber-400" aria-hidden="true" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                  {a.label} +{a.percentage.toFixed(0)}%
+                </span>
+              </div>
+            ))}
           </div>
         )}
         <p className="mt-4 font-grotesk text-[42px] font-bold leading-none tracking-tight text-white sm:text-[50px]">
@@ -478,10 +532,18 @@ function ShareContent() {
           {calculation.anesthesiologist_fee > 0 && (
             <SummaryPill label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
           )}
-          {calculation.urgency_emergency_applied && (
-            <SummaryPill label="Acréscimo UE" value={money.format(calculation.urgency_emergency_value)} />
+          {hasAdjustments && (
+            <SummaryPill
+              label={`Acréscimos +${calculation.total_adjustment_percentage.toFixed(0)}%`}
+              value={money.format(calculation.adjustment_value)}
+            />
           )}
         </div>
+        {hasAdjustments && (
+          <p className="mt-4 text-[10px] leading-relaxed text-slate-500">
+            Base: {money.format(calculation.base_team_total_value)} · Acréscimos CBHPM: +{money.format(calculation.adjustment_value)}
+          </p>
+        )}
         <p className="mt-7 text-[10px] leading-relaxed tracking-wide text-slate-500">
           {accessRuleLabel}
         </p>
@@ -503,13 +565,17 @@ function ShareContent() {
           {calculation.anesthesiologist_fee > 0 && (
             <MetaField label="Anestesiologista" value={money.format(calculation.anesthesiologist_fee)} />
           )}
-          {calculation.urgency_emergency_applied && (
-            <MetaField label="Acréscimo UE" value={`+${money.format(calculation.urgency_emergency_value)}`} />
+          {hasAdjustments && (
+            <MetaField
+              label={`Acréscimos CBHPM +${calculation.total_adjustment_percentage.toFixed(0)}%`}
+              value={`+${money.format(calculation.adjustment_value)}`}
+            />
           )}
         </div>
-        {calculation.urgency_emergency_applied && (
+        {hasAdjustments && (
           <p className="mt-3 text-[10px] font-semibold text-amber-600">
-            Urgência / Emergência +{calculation.urgency_emergency_percentage.toFixed(0)}% · Item 2 das Instruções Gerais da CBHPM
+            {calculation.selected_adjustments.map((a) => `${a.label} +${a.percentage.toFixed(0)}%`).join(" · ")}
+            {" "}· CBHPM 2022, Instruções Gerais
           </p>
         )}
         <p className="mt-5 text-[10px] text-slate-400">{accessRuleLabel}</p>
@@ -524,8 +590,13 @@ function ShareContent() {
               <p>
                 O procedimento <strong className="text-slate-700">{principalCode?.description}</strong>{" "}
                 (porte {principalCode?.porte}) é remunerado integralmente pelo seu porte CBHPM.{" "}
-                Total do cirurgião:{" "}
-                <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+                Base do cirurgião:{" "}
+                <strong className="text-slate-700">{money.format(calculation.base_surgeon_value)}</strong>.
+                {hasAdjustments && (
+                  <>
+                    {" "}Após acréscimos de +{calculation.total_adjustment_percentage.toFixed(0)}%: <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+                  </>
+                )}
               </p>
             ) : (
               <>
@@ -546,8 +617,13 @@ function ShareContent() {
                   {money.format(calculation.surgeon_breakdown.additional_discounted)}.
                 </p>
                 <p>
-                  Total do cirurgião:{" "}
-                  <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+                  Base CBHPM cirurgião:{" "}
+                  <strong className="text-slate-700">{money.format(calculation.base_surgeon_value)}</strong>.
+                  {hasAdjustments && (
+                    <>
+                      {" "}Após acréscimos de +{calculation.total_adjustment_percentage.toFixed(0)}%: <strong className="text-slate-700">{money.format(calculation.lead_surgeon_fee)}</strong>.
+                    </>
+                  )}
                 </p>
               </>
             )}
@@ -594,20 +670,38 @@ function ShareContent() {
             )}
           </ExplainBlock>
 
-          {/* Urgência / Emergência */}
-          {calculation.urgency_emergency_applied && (
-            <ExplainBlock title="Urgência / Emergência">
+          {/* Acréscimos CBHPM */}
+          {hasAdjustments ? (
+            <ExplainBlock title="Acréscimos CBHPM">
               <p>
-                Acréscimo de{" "}
-                <strong className="text-amber-700">+{calculation.urgency_emergency_percentage.toFixed(0)}%</strong>{" "}
-                aplicado sobre os honorários de cirurgião, auxiliares e anestesiologista, conforme{" "}
-                <strong className="text-slate-700">item 2 das Instruções Gerais da CBHPM</strong>{" "}
-                (atos realizados entre 19h e 7h, finais de semana ou feriados).
+                Os seguintes acréscimos foram aplicados <strong className="text-slate-700">aditivamente</strong>{" "}
+                sobre os honorários de cirurgião, auxiliares e anestesiologista,
+                conforme as <strong className="text-slate-700">Instruções Gerais da CBHPM 2022</strong>:
+              </p>
+              <ul className="mt-1 space-y-0.5 pl-1">
+                {calculation.selected_adjustments.map((a) => (
+                  <li key={a.code} className="text-[12.5px]">
+                    <strong className="text-amber-700">+{a.percentage.toFixed(0)}%</strong>{" "}
+                    <span className="text-slate-600">— {a.label}</span>
+                    <span className="ml-2 text-[11px] text-slate-400">({a.source})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">
+                Total dos acréscimos:{" "}
+                <strong className="text-amber-700">+{calculation.total_adjustment_percentage.toFixed(0)}%</strong>{" "}
+                (modelo aditivo — não multiplicativo).
+                Valor absoluto do acréscimo:{" "}
+                <strong className="font-grotesk text-amber-700">+{money.format(calculation.adjustment_value)}</strong>.
               </p>
               <p>
-                Valor do acréscimo:{" "}
-                <strong className="font-grotesk text-amber-700">{money.format(calculation.urgency_emergency_value)}</strong>.
+                Base da equipe (sem acréscimos):{" "}
+                <strong className="font-grotesk text-slate-700">{money.format(calculation.base_team_total_value)}</strong>.
               </p>
+            </ExplainBlock>
+          ) : (
+            <ExplainBlock title="Acréscimos CBHPM">
+              <p>Nenhum acréscimo aplicado.</p>
             </ExplainBlock>
           )}
 
@@ -624,12 +718,13 @@ function ShareContent() {
                 <> e anestesiologista (
                   <strong className="font-grotesk text-slate-700">{money.format(calculation.anesthesiologist_fee)}</strong>
                   )</>
-              )}{calculation.urgency_emergency_applied && (
-                <>, incluindo acréscimo de urgência/emergência de{" "}
-                  <strong className="font-grotesk text-amber-700">{money.format(calculation.urgency_emergency_value)}</strong>
-                </>
               )}{" "}
               = <strong className="font-grotesk text-slate-700">{money.format(calculation.final_total)}</strong>.
+              {hasAdjustments && (
+                <>
+                  {" "}Os acréscimos de +{calculation.total_adjustment_percentage.toFixed(0)}% já estão incluídos em todos os valores acima.
+                </>
+              )}
             </p>
           </ExplainBlock>
 

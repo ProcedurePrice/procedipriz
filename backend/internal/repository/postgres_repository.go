@@ -116,14 +116,19 @@ func (r *PostgresRepository) SaveComposition(comp models.Composition, physicianI
 		return nil, fmt.Errorf("postgres: marshal selected codes: %w", err)
 	}
 
+	adjJSON, err := json.Marshal(comp.Adjustments)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: marshal adjustments: %w", err)
+	}
+
 	ctx := context.Background()
 	err = r.pool.QueryRow(ctx, `
 		INSERT INTO compositions (
 			public_id, physician_id, name, sbn_procedure_id, sbn_procedure_name,
 			selected_codes, access_route_type, auxiliaries_count, requires_anesthesia,
-			urgency_emergency
+			adjustments
 		) VALUES (
-			$1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7, $8, $9, $10
+			$1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb
 		)
 		RETURNING id::text, created_at, updated_at
 	`,
@@ -136,7 +141,7 @@ func (r *PostgresRepository) SaveComposition(comp models.Composition, physicianI
 		string(comp.AccessRouteType),
 		comp.AuxiliariesCount,
 		comp.RequiresAnesthesia,
-		comp.UrgencyEmergency,
+		string(adjJSON),
 	).Scan(&comp.ID, &comp.CreatedAt, &comp.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: save composition: %w", err)
@@ -197,13 +202,14 @@ func (r *PostgresRepository) GetCompositionByPublicID(publicID, physicianID stri
 	var codesJSON []byte
 	var accessRoute string
 
+	var adjJSON []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			id::text, public_id::text, name,
 			COALESCE(sbn_procedure_id, ''), sbn_procedure_name,
 			selected_codes, access_route_type,
 			auxiliaries_count, requires_anesthesia,
-			urgency_emergency, created_at, updated_at
+			adjustments, created_at, updated_at
 		FROM compositions
 		WHERE public_id = $1 AND physician_id = $2::uuid
 	`, publicID, physicianID).Scan(
@@ -211,7 +217,7 @@ func (r *PostgresRepository) GetCompositionByPublicID(publicID, physicianID stri
 		&comp.SBNProcedureID, &comp.SBNProcedureName,
 		&codesJSON, &accessRoute,
 		&comp.AuxiliariesCount, &comp.RequiresAnesthesia,
-		&comp.UrgencyEmergency, &comp.CreatedAt, &comp.UpdatedAt,
+		&adjJSON, &comp.CreatedAt, &comp.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -222,6 +228,12 @@ func (r *PostgresRepository) GetCompositionByPublicID(publicID, physicianID stri
 
 	if err := json.Unmarshal(codesJSON, &comp.SelectedCodes); err != nil {
 		return nil, fmt.Errorf("postgres: unmarshal selected codes: %w", err)
+	}
+	comp.Adjustments = []string{}
+	if len(adjJSON) > 0 {
+		if err := json.Unmarshal(adjJSON, &comp.Adjustments); err != nil {
+			return nil, fmt.Errorf("postgres: unmarshal adjustments: %w", err)
+		}
 	}
 	comp.AccessRouteType = models.AccessRouteType(accessRoute)
 	comp.PhysicianID = physicianID
@@ -237,6 +249,11 @@ func (r *PostgresRepository) UpdateComposition(publicID string, comp models.Comp
 	}
 
 	ctx := context.Background()
+	adjJSON, err := json.Marshal(comp.Adjustments)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: marshal adjustments: %w", err)
+	}
+
 	err = r.pool.QueryRow(ctx, `
 		UPDATE compositions SET
 			name                = $3,
@@ -246,7 +263,7 @@ func (r *PostgresRepository) UpdateComposition(publicID string, comp models.Comp
 			access_route_type   = $7,
 			auxiliaries_count   = $8,
 			requires_anesthesia = $9,
-			urgency_emergency   = $10,
+			adjustments         = $10::jsonb,
 			updated_at          = now()
 		WHERE public_id = $1 AND physician_id = $2::uuid
 		RETURNING id::text, public_id::text, created_at, updated_at
@@ -260,7 +277,7 @@ func (r *PostgresRepository) UpdateComposition(publicID string, comp models.Comp
 		string(comp.AccessRouteType),
 		comp.AuxiliariesCount,
 		comp.RequiresAnesthesia,
-		comp.UrgencyEmergency,
+		string(adjJSON),
 	).Scan(&comp.ID, &comp.PublicID, &comp.CreatedAt, &comp.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

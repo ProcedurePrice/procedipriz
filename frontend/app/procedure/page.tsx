@@ -47,6 +47,13 @@ type CodeBreakdown = {
   base_value: number;
   is_principal: boolean;
 };
+type AppliedAdjustment = {
+  code: string;
+  label: string;
+  percentage: number;
+  source: string;
+};
+
 type CalculationResult = {
   code_breakdown: CodeBreakdown[];
   access_route_type: AccessRouteType;
@@ -57,9 +64,13 @@ type CalculationResult = {
   anesthesiologist_fee: number;
   final_total: number;
   total_base: number;
-  urgency_emergency_applied: boolean;
-  urgency_emergency_percentage: number;
-  urgency_emergency_value: number;
+  base_surgeon_value: number;
+  base_auxiliaries_total_value: number;
+  base_anesthesiologist_value: number;
+  base_team_total_value: number;
+  selected_adjustments: AppliedAdjustment[];
+  total_adjustment_percentage: number;
+  adjustment_value: number;
 };
 
 type CompositionDetail = {
@@ -71,10 +82,46 @@ type CompositionDetail = {
   access_route_type: "same" | "different";
   auxiliaries_count: number;
   requires_anesthesia: boolean;
-  urgency_emergency: boolean;
+  adjustments: string[];
   created_at: string;
   updated_at: string;
 };
+
+// Adjustment catalogue — matches service.AdjustmentCatalog in the backend.
+const ADJUSTMENT_CATALOG = [
+  {
+    code: "emergency_special_hours",
+    label: "Urgência/emergência em horário especial",
+    pct: 30,
+    helper: "Entre 19h e 7h, ou em sábados, domingos e feriados, conforme Instruções Gerais da CBHPM.",
+    group: "emergency" as const,
+  },
+  {
+    code: "pediatric_low_weight_or_premature",
+    label: "< 2.500 g ou prematuro < 37 semanas",
+    pct: 100,
+    helper: null,
+    group: "pediatric" as const,
+  },
+  {
+    code: "pediatric_neonate_or_infant",
+    label: "Neonato/lactente — 0 a 24 meses",
+    pct: 50,
+    helper: null,
+    group: "pediatric" as const,
+  },
+  {
+    code: "pediatric_child_under_12",
+    label: "Pediátrico — 24 meses a 12 anos incompletos",
+    pct: 30,
+    helper: null,
+    group: "pediatric" as const,
+  },
+];
+
+const PEDIATRIC_CODES = ADJUSTMENT_CATALOG
+  .filter((a) => a.group === "pediatric")
+  .map((a) => a.code);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,8 +151,25 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   const [auxiliariesCount, setAuxiliariesCount] = useState(1);
   const [requiresAnesthesia, setRequiresAnesthesia] = useState(true);
-  const [urgencyEmergency, setUrgencyEmergency] = useState(false);
+  const [adjustments, setAdjustments] = useState<string[]>([]);
   const [accessRoute, setAccessRoute] = useState<AccessRouteType>(initialRoute);
+
+  const hasAdjustment = (code: string) => adjustments.includes(code);
+
+  const toggleEmergency = () =>
+    setAdjustments((prev) =>
+      prev.includes("emergency_special_hours")
+        ? prev.filter((c) => c !== "emergency_special_hours")
+        : [...prev, "emergency_special_hours"],
+    );
+
+  const setPediatric = (code: string | null) =>
+    setAdjustments((prev) => {
+      const withoutPediatric = prev.filter((c) => !PEDIATRIC_CODES.includes(c));
+      return code ? [...withoutPediatric, code] : withoutPediatric;
+    });
+
+  const activePediatric = adjustments.find((c) => PEDIATRIC_CODES.includes(c)) ?? null;
 
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -187,7 +251,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       setCompositionName(comp.name);
       setAccessRoute(comp.access_route_type);
       setRequiresAnesthesia(comp.requires_anesthesia);
-      setUrgencyEmergency(comp.urgency_emergency ?? false);
+      setAdjustments(comp.adjustments ?? []);
       setAuxiliariesCount(comp.auxiliaries_count);
 
       if (!comp.sbn_procedure_id) return;
@@ -296,9 +360,9 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       auxiliaries_count: auxiliariesCount,
       requires_anesthesia: requiresAnesthesia,
       access_route_type: accessRoute,
-      urgency_emergency: urgencyEmergency,
+      adjustments,
     };
-  }, [allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, urgencyEmergency]);
+  }, [allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, adjustments]);
 
   // ── Real-time calculation (debounced 150 ms) ──────────────────────────────
 
@@ -347,7 +411,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         access_route_type: accessRoute,
         auxiliaries_count: auxiliariesCount,
         requires_anesthesia: requiresAnesthesia,
-        urgency_emergency: urgencyEmergency,
+        adjustments,
       };
       const res = await fetch("/api/compositions", {
         method: "POST",
@@ -370,7 +434,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     } finally {
       setSavingComposition(false);
     }
-  }, [compositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, urgencyEmergency, getToken]);
+  }, [compositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, adjustments, getToken]);
 
   // ── Update composition (loaded from URL) ──────────────────────────────────
 
@@ -393,7 +457,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         access_route_type: accessRoute,
         auxiliaries_count: auxiliariesCount,
         requires_anesthesia: requiresAnesthesia,
-        urgency_emergency: urgencyEmergency,
+        adjustments,
       };
       const res = await fetch(`/api/compositions/${loadedCompositionId}`, {
         method: "PUT",
@@ -413,7 +477,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     } finally {
       setSavingComposition(false);
     }
-  }, [loadedCompositionId, loadedCompositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, urgencyEmergency, getToken]);
+  }, [loadedCompositionId, loadedCompositionName, selectedProcedures, allCbhpmCodes, selectedCodes, accessRoute, auxiliariesCount, requiresAnesthesia, adjustments, getToken]);
 
   // ── Share ─────────────────────────────────────────────────────────────────
 
@@ -429,12 +493,12 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     url.searchParams.set("a", String(auxiliariesCount));
     url.searchParams.set("an", requiresAnesthesia ? "1" : "0");
     url.searchParams.set("route", accessRoute);
-    if (urgencyEmergency) url.searchParams.set("ue", "1");
+    if (adjustments.length > 0) url.searchParams.set("adj", adjustments.join(","));
     navigator.clipboard.writeText(url.toString()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedProcedures, calculation, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, urgencyEmergency]);
+  }, [selectedProcedures, calculation, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, adjustments]);
 
   const toggleCode = (code: string) => {
     setSelectedCodes((prev) => {
@@ -717,32 +781,112 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                   <Toggle checked={requiresAnesthesia} onChange={setRequiresAnesthesia} />
                 </div>
 
-                <div className={cn(
-                  "flex items-start justify-between gap-4 rounded-2xl border px-4 py-4 transition-colors",
-                  urgencyEmergency
-                    ? "border-amber-200 bg-amber-50/60 dark:border-amber-400/20 dark:bg-amber-900/10"
-                    : "border-slate-100 dark:border-slate-800",
-                )}>
-                  <div className="flex items-start gap-2.5">
-                    <div className={cn(
-                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                      urgencyEmergency
-                        ? "bg-amber-100 dark:bg-amber-900/30"
-                        : "bg-slate-100 dark:bg-slate-800",
-                    )}>
-                      <AlertCircle aria-hidden="true" size={16} className={urgencyEmergency ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"} />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-semibold text-slate-950 dark:text-slate-50">
-                        Aplicar acréscimo de urgência/emergência (+30%)
+              </div>
+
+              {/* Acréscimos CBHPM */}
+              <div className="mt-4 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <AlertCircle aria-hidden="true" className="text-primary" size={15} />
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Acréscimos CBHPM
+                  </span>
+                </div>
+
+                {/* Urgência/emergência — checkbox */}
+                {(() => {
+                  const em = ADJUSTMENT_CATALOG.find((a) => a.code === "emergency_special_hours")!;
+                  const active = hasAdjustment(em.code);
+                  return (
+                    <button
+                      type="button"
+                      onClick={toggleEmergency}
+                      className={cn(
+                        "mb-3 flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                        active
+                          ? "border-amber-200 bg-amber-50/60 dark:border-amber-400/20 dark:bg-amber-900/10"
+                          : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
+                      )}
+                    >
+                      <span className={cn(
+                        "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-colors",
+                        active ? "border-amber-500 bg-amber-500 dark:border-amber-400 dark:bg-amber-400" : "border-slate-300 dark:border-slate-600",
+                      )}>
+                        {active && <Check size={10} strokeWidth={3} className="text-white" />}
+                      </span>
+                      <div>
+                        <div className={cn("text-[13px] font-semibold", active ? "text-amber-800 dark:text-amber-300" : "text-slate-700 dark:text-slate-300")}>
+                          {em.label} (+{em.pct}%)
+                        </div>
+                        {em.helper && (
+                          <div className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">{em.helper}</div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                        Conforme item 2 das Instruções Gerais da CBHPM, atos médicos em urgência/emergência
-                        realizados entre 19h e 7h, ou em sábados, domingos e feriados, podem receber acréscimo de 30%.
-                      </div>
-                    </div>
+                    </button>
+                  );
+                })()}
+
+                {/* Pediátrico — radio group (mutually exclusive) */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.4px] text-slate-400 dark:text-slate-500 mb-1.5">
+                    Paciente pediátrico
                   </div>
-                  <Toggle checked={urgencyEmergency} onChange={setUrgencyEmergency} />
+                  {/* "Nenhuma" option */}
+                  <button
+                    type="button"
+                    onClick={() => setPediatric(null)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                      activePediatric === null
+                        ? "border-primary/30 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                        : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
+                    )}
+                  >
+                    <span className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                      activePediatric === null
+                        ? "border-primary bg-primary dark:border-teal-400 dark:bg-teal-400"
+                        : "border-slate-300 dark:border-slate-600",
+                    )}>
+                      {activePediatric === null && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                    </span>
+                    <span className={cn("text-[13px] font-medium", activePediatric === null ? "text-primary dark:text-teal-300" : "text-slate-600 dark:text-slate-400")}>
+                      Não pediátrico
+                    </span>
+                  </button>
+
+                  {ADJUSTMENT_CATALOG.filter((a) => a.group === "pediatric").map((adj) => {
+                    const isActive = activePediatric === adj.code;
+                    return (
+                      <button
+                        key={adj.code}
+                        type="button"
+                        onClick={() => setPediatric(adj.code)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          isActive
+                            ? "border-primary/30 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                            : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
+                        )}
+                      >
+                        <span className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          isActive
+                            ? "border-primary bg-primary dark:border-teal-400 dark:bg-teal-400"
+                            : "border-slate-300 dark:border-slate-600",
+                        )}>
+                          {isActive && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <div>
+                          <span className={cn("text-[13px] font-medium", isActive ? "text-primary dark:text-teal-300" : "text-slate-600 dark:text-slate-400")}>
+                            {adj.label}
+                          </span>
+                          <span className={cn("ml-2 text-[12px] font-semibold", isActive ? "text-primary dark:text-teal-300" : "text-slate-400")}>
+                            +{adj.pct}%
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </>
@@ -817,21 +961,24 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                 </div>
               </section>
 
-              {/* ── Urgência/emergência ──────────────────────────────────── */}
-              {calculation.urgency_emergency_applied && (
-                <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-amber-200 dark:border-amber-400/20 bg-amber-50/70 dark:bg-amber-900/10 px-3.5 py-3">
-                  <AlertCircle size={14} className="mt-px shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                  <div>
+              {/* ── Acréscimos CBHPM ─────────────────────────────────────── */}
+              {calculation.selected_adjustments.length > 0 && (
+                <div className="mb-5 rounded-xl border border-amber-200 dark:border-amber-400/20 bg-amber-50/70 dark:bg-amber-900/10 px-3.5 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
                     <span className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
-                      Acréscimo de urgência/emergência: +{calculation.urgency_emergency_percentage}%
+                      Acréscimos CBHPM — total +{calculation.total_adjustment_percentage.toFixed(0)}%
                     </span>
-                    <span className="ml-2 font-grotesk text-[12px] font-bold text-amber-800 dark:text-amber-300">
-                      (+{money.format(calculation.urgency_emergency_value)})
+                    <span className="ml-auto font-grotesk text-[12px] font-bold text-amber-800 dark:text-amber-300">
+                      +{money.format(calculation.adjustment_value)}
                     </span>
-                    <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400/80">
-                      Aplicado conforme item 2 das Instruções Gerais da CBHPM.
-                    </p>
                   </div>
+                  {calculation.selected_adjustments.map((a) => (
+                    <div key={a.code} className="ml-6 flex items-center justify-between">
+                      <span className="text-[11px] text-amber-700 dark:text-amber-400">{a.label}</span>
+                      <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">+{a.percentage.toFixed(0)}%</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -914,10 +1061,10 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                       <span className="text-right font-semibold">{money.format(calculation.anesthesiologist_fee)}</span>
                     </>
                   )}
-                  {calculation.urgency_emergency_applied && (
+                  {calculation.selected_adjustments.length > 0 && (
                     <>
-                      <span className="text-amber-300">Urgência/Emergência (+{calculation.urgency_emergency_percentage.toFixed(0)}%)</span>
-                      <span className="text-right font-semibold text-amber-300">+{money.format(calculation.urgency_emergency_value)}</span>
+                      <span className="text-amber-300">Acréscimos CBHPM (+{calculation.total_adjustment_percentage.toFixed(0)}%)</span>
+                      <span className="text-right font-semibold text-amber-300">+{money.format(calculation.adjustment_value)}</span>
                     </>
                   )}
                 </div>

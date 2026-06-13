@@ -48,7 +48,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accessRoute := models.AccessRouteType(req.AccessRouteType)
-	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia, accessRoute, req.UrgencyEmergency)
+	result := service.Calculate(selected, req.AuxiliariesCount, req.RequiresAnesthesia, accessRoute, req.Adjustments)
 
 	breakdown := make([]generated.CodeBreakdown, 0, len(result.CodeBreakdown))
 	for _, b := range result.CodeBreakdown {
@@ -70,6 +70,16 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	selectedAdj := make([]generated.AppliedAdjustment, 0, len(result.SelectedAdjustments))
+	for _, a := range result.SelectedAdjustments {
+		selectedAdj = append(selectedAdj, generated.AppliedAdjustment{
+			Code:       a.Code,
+			Label:      a.Label,
+			Percentage: a.Percentage,
+			Source:     a.Source,
+		})
+	}
+
 	respondJSON(w, http.StatusOK, generated.CalculateResponse{
 		CodeBreakdown:   breakdown,
 		AccessRouteType: generated.AccessRouteType(result.AccessRouteType),
@@ -80,14 +90,18 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 			AdditionalDiscounted: result.SurgeonBreakdown.AdditionalDiscounted,
 			SurgeonTotal:         result.SurgeonBreakdown.SurgeonTotal,
 		},
-		LeadSurgeonFee:             result.LeadSurgeonFee,
-		IndividualAuxFees:          auxFees,
-		AuxiliariesFee:             result.AuxiliariesFee,
-		AnesthesiologistFee:        result.AnesthesiologistFee,
-		FinalTotal:                 result.FinalTotal,
-		TotalBase:                  result.TotalBase,
-		UrgencyEmergencyApplied:    result.UrgencyEmergencyApplied,
-		UrgencyEmergencyPercentage: result.UrgencyEmergencyPercentage,
-		UrgencyEmergencyValue:      result.UrgencyEmergencyValue,
+		TotalBase:                 result.TotalBase,
+		BaseSurgeonValue:          result.BaseSurgeonValue,
+		BaseAuxiliaresTotalValue:  result.BaseAuxiliaresTotalValue,
+		BaseAnesthesiologistValue: result.BaseAnesthesiologistValue,
+		BaseTeamTotalValue:        result.BaseTeamTotalValue,
+		SelectedAdjustments:       selectedAdj,
+		TotalAdjustmentPercentage: result.TotalAdjustmentPercentage,
+		AdjustmentValue:           result.AdjustmentValue,
+		LeadSurgeonFee:            result.LeadSurgeonFee,
+		IndividualAuxFees:         auxFees,
+		AuxiliariesFee:            result.AuxiliariesFee,
+		AnesthesiologistFee:       result.AnesthesiologistFee,
+		FinalTotal:                result.FinalTotal,
 	})
 }
