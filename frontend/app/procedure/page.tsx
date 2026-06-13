@@ -962,18 +962,18 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
               </section>
 
               {/* ── Acréscimos CBHPM ─────────────────────────────────────── */}
-              {calculation.selected_adjustments.length > 0 && (
+              {(calculation.selected_adjustments ?? []).length > 0 && (
                 <div className="mb-5 rounded-xl border border-amber-200 dark:border-amber-400/20 bg-amber-50/70 dark:bg-amber-900/10 px-3.5 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <AlertCircle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
                     <span className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
-                      Acréscimos CBHPM — total +{calculation.total_adjustment_percentage.toFixed(0)}%
+                      Acréscimos CBHPM — total +{(calculation.total_adjustment_percentage ?? 0).toFixed(0)}%
                     </span>
                     <span className="ml-auto font-grotesk text-[12px] font-bold text-amber-800 dark:text-amber-300">
-                      +{money.format(calculation.adjustment_value)}
+                      +{money.format(calculation.adjustment_value ?? 0)}
                     </span>
                   </div>
-                  {calculation.selected_adjustments.map((a) => (
+                  {(calculation.selected_adjustments ?? []).map((a) => (
                     <div key={a.code} className="ml-6 flex items-center justify-between">
                       <span className="text-[11px] text-amber-700 dark:text-amber-400">{a.label}</span>
                       <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">+{a.percentage.toFixed(0)}%</span>
@@ -1061,10 +1061,10 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                       <span className="text-right font-semibold">{money.format(calculation.anesthesiologist_fee)}</span>
                     </>
                   )}
-                  {calculation.selected_adjustments.length > 0 && (
+                  {(calculation.selected_adjustments ?? []).length > 0 && (
                     <>
-                      <span className="text-amber-300">Acréscimos CBHPM (+{calculation.total_adjustment_percentage.toFixed(0)}%)</span>
-                      <span className="text-right font-semibold text-amber-300">+{money.format(calculation.adjustment_value)}</span>
+                      <span className="text-amber-300">Acréscimos CBHPM (+{(calculation.total_adjustment_percentage ?? 0).toFixed(0)}%)</span>
+                      <span className="text-right font-semibold text-amber-300">+{money.format(calculation.adjustment_value ?? 0)}</span>
                     </>
                   )}
                 </div>

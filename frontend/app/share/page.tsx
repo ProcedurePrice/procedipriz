@@ -329,7 +329,7 @@ function ShareContent() {
   const hasMultiProcedure = additionalCodes.length > 0;
   const hasAuxiliaries = auxiliariesCount > 0 && calculation.individual_auxiliary_fees.length > 0;
   const hasTeam = hasAuxiliaries || calculation.anesthesiologist_fee > 0;
-  const hasAdjustments = calculation.selected_adjustments.length > 0;
+  const hasAdjustments = (calculation.selected_adjustments ?? []).length > 0;
 
   const accessRuleLabel =
     accessRoute === "same"
