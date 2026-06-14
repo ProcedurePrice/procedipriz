@@ -1,9 +1,10 @@
 "use client";
 
-import { Activity, AlertCircle, Check, Copy, Info, Printer } from "lucide-react";
+import { AlertCircle, Check, Copy, Info, Printer, Smartphone } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/components/ui/utils";
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ const PAGE_STYLES = `
     .print-only { display: block !important; }
     .print-bg { background: #ffffff !important; padding: 0 !important; }
     .print-card {
+      background: #ffffff !important;
       box-shadow: none !important;
       border-radius: 0 !important;
       ring: none !important;
@@ -157,7 +159,7 @@ function TeamCard({ role, note, value }: { role: string; note?: string; value: n
     <div className="report-section rounded-xl bg-white p-5 ring-1 ring-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
       <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
         {role}
-        {note && <span className="ml-2 text-teal-700">{note}</span>}
+        {note && <span className="ml-2 text-[#355C8A]">{note}</span>}
       </p>
       <p className="mt-3 font-grotesk text-[22px] font-bold leading-none tracking-tight text-slate-900">
         {money.format(value)}
@@ -179,7 +181,7 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
 function ExplainBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-4">
-      <div className="w-0.5 shrink-0 rounded-full bg-teal-600/25 self-stretch" />
+      <div className="w-0.5 shrink-0 rounded-full bg-[#355C8A]/25 self-stretch" />
       <div>
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
         <div className="space-y-1 text-[13px] leading-relaxed text-slate-500">{children}</div>
@@ -208,7 +210,7 @@ function ActionButtons() {
         className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
       >
         {copied
-          ? <Check size={12} className="text-teal-600" aria-hidden="true" />
+          ? <Check size={12} className="text-[#355C8A]" aria-hidden="true" />
           : <Copy size={12} aria-hidden="true" />}
         <span>{copied ? "Copiado!" : "Copiar link"}</span>
       </button>
@@ -222,6 +224,48 @@ function ActionButtons() {
         <span className="sm:hidden">Imprimir</span>
       </button>
     </div>
+  );
+}
+
+// ─── QR code section (screen + print) ─────────────────────────────────────────
+
+// Encodes the exact public URL of this shared report so it can be opened on a
+// phone — visible on screen and preserved in print for paper hand-offs.
+function ShareQRSection() {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    setUrl(window.location.href);
+  }, []);
+
+  if (!url) return null;
+
+  return (
+    <section className="report-section border-t border-slate-100 px-8 py-10 sm:px-12">
+      <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-center sm:text-left">
+        <div className="shrink-0 rounded-2xl border border-slate-200 bg-white p-3.5">
+          <QRCodeSVG
+            value={url}
+            size={132}
+            level="M"
+            marginSize={0}
+            bgColor="#FFFFFF"
+            fgColor="#0F172A"
+            title="QR Code para abrir o relatório no celular"
+            className="h-[132px] w-[132px]"
+          />
+        </div>
+        <div className="max-w-[280px]">
+          <p className="flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 sm:justify-start">
+            <Smartphone size={11} aria-hidden="true" /> Abrir no celular
+          </p>
+          <p className="mt-2.5 text-[12px] leading-relaxed text-slate-500">
+            Escaneie o QR Code para abrir este relatório no smartphone.
+          </p>
+          <p className="mt-2.5 break-all text-[10px] font-medium text-slate-400">{url}</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -314,7 +358,7 @@ function ShareContent() {
         <p className="text-[14px] text-slate-600">{error}</p>
         <Link
           href="/"
-          className="mt-2 text-[12px] font-semibold text-teal-700 underline-offset-2 hover:underline"
+          className="mt-2 text-[12px] font-semibold text-[#1E3A5F] underline-offset-2 hover:underline"
         >
           Voltar ao início
         </Link>
@@ -406,7 +450,7 @@ function ShareContent() {
                   <td className="py-5 pr-5">
                     <span className="font-mono text-[11px] text-slate-500">{b.cbhpm_code}</span>
                     {b.is_principal && (
-                      <span className="ml-2 rounded-sm bg-teal-900/[0.06] px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-600/20">
+                      <span className="ml-2 rounded-sm bg-[#1E3A5F]/[0.06] px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-[#1E3A5F] ring-1 ring-[#355C8A]/20">
                         principal
                       </span>
                     )}
@@ -746,6 +790,14 @@ function ShareContent() {
           </div>
         </div>
       </ReportSection>
+
+      {/* ── 6. QR code — abrir no celular (screen + print) ───────── */}
+      <ShareQRSection />
+
+      {/* Informational — shared-view marker */}
+      <p className="px-8 pb-8 text-center text-[10px] text-slate-400 sm:px-12">
+        Visualizando via compartilhamento Afere
+      </p>
     </article>
   );
 }
@@ -767,31 +819,32 @@ export default function SharePage() {
       <div
         className="print-bg min-h-screen sm:py-10"
         style={{
-          background:
-            "radial-gradient(ellipse 900px 480px at 50% 0px, rgba(15,118,110,0.07) 0%, transparent 65%), #edf0f5",
+          background: [
+            "radial-gradient(circle at top center, rgba(53,92,138,0.18) 0%, transparent 45%)",
+            "radial-gradient(circle at 15% 88%, rgba(30,58,95,0.08) 0%, transparent 40%)",
+            "linear-gradient(180deg, #E2EBF3 0%, #D6E1EB 100%)",
+          ].join(", "),
         }}
       >
         <div
-          className="print-card mx-auto max-w-[720px] overflow-hidden bg-white sm:rounded-2xl sm:ring-1 sm:ring-slate-900/5"
-          style={{ boxShadow: "0 4px 32px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}
+          className="print-card mx-auto max-w-[720px] overflow-hidden bg-[#F3F6F9] sm:rounded-2xl sm:ring-1 sm:ring-[#355C8A]/10"
+          style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.08), 0 24px 70px rgba(15,23,42,0.14)" }}
         >
           {/* Accent stripe */}
           <div
             aria-hidden="true"
             style={{
               height: "3px",
-              background: "linear-gradient(90deg, #0D6E66 0%, #0F766E 40%, #14B8A6 100%)",
+              background: "linear-gradient(90deg, #1E3A5F 0%, #355C8A 40%, #5F84B3 100%)",
             }}
           />
 
           {/* Report header */}
           <header className="flex items-center justify-between border-b border-slate-100 px-8 py-6 sm:px-12">
             <div className="flex items-center gap-3.5">
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                style={{ background: "linear-gradient(135deg, #0D6E66, #0F766E)" }}
-              >
-                <Activity className="text-white" size={17} aria-hidden="true" />
+              <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-[9px] border border-[rgba(53,92,138,0.12)]" style={{ background: "linear-gradient(145deg, #E6EEF5, #D8E5EE)" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/afere-symbol.svg" alt="" aria-hidden="true" width={24} height={23} style={{ display: "block" }} />
               </div>
               <div>
                 <p className="text-[15px] font-extrabold leading-none tracking-tight text-slate-900">
@@ -842,7 +895,7 @@ export default function SharePage() {
               </p>
               <Link
                 href="/"
-                className="no-print text-[11px] font-semibold text-teal-700 transition-colors hover:text-teal-900"
+                className="no-print text-[11px] font-semibold text-[#1E3A5F] transition-colors hover:text-[#355C8A]"
               >
                 Conhecer o Afere ↗
               </Link>

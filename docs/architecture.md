@@ -47,6 +47,20 @@ flowchart TD
     FE -->|sign-in / UserButton| Clerk
 ```
 
+## Frontend Routes (v2.6.0+)
+
+| Route | Auth | Description |
+|---|---|---|
+| `/` | Optional | Workspace home. Authenticated: greeting, recent compositions, quick-tools grid, release notes. Unauthenticated: minimal branded entry screen with sign-in button. |
+| `/novo-calculo` | Optional | Calculation entry. Search tab (procedure autocomplete → `/procedure`) and Minhas Composições tab (list, reload, delete). |
+| `/procedure?sbn=…` | Optional | Procedure detail + composition builder + valuation. Compositions require auth to save. |
+| `/procedure?composition=…` | Optional | Load a saved composition into the procedure page. |
+| `/share?…` | No | Read-only professional report. Reconstructs calculation state from URL params. |
+
+> `/` is the physician workspace, not a marketing landing page. The search-first experience lives at `/novo-calculo`.
+
+---
+
 ## Components
 
 ### Frontend

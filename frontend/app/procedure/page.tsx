@@ -1,17 +1,18 @@
 "use client";
 
 import {
-  Activity,
   AlertCircle,
   BookmarkCheck,
   Calculator,
   Check,
+  Copy,
   HeartPulse,
   Info,
   LogIn,
   Moon,
   Route,
   Share2,
+  Smartphone,
   Stethoscope,
   Sun,
   X,
@@ -19,6 +20,7 @@ import {
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { Autocomplete, type SBNProcedureOption } from "@/components/ui/autocomplete";
 import { Toggle } from "@/components/ui/toggle";
@@ -173,6 +175,9 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
 
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Share modal (link + QR code)
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   // Composition save states
   const [showSaveForm, setShowSaveForm] = useState(false);
@@ -481,8 +486,9 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
 
   // ── Share ─────────────────────────────────────────────────────────────────
 
-  const shareCalculation = useCallback(() => {
-    if (selectedProcedures.length === 0 || !calculation) return;
+  // Builds the public share URL for the current calculation. This is the exact
+  // same URL the QR code encodes — keep them in sync via this single source.
+  const buildShareUrl = useCallback(() => {
     const url = new URL("/share", window.location.origin);
     url.searchParams.set("sbn", selectedProcedures.map((p) => p.id).join(","));
     const codeParam = allCbhpmCodes
@@ -494,11 +500,21 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
     url.searchParams.set("an", requiresAnesthesia ? "1" : "0");
     url.searchParams.set("route", accessRoute);
     if (adjustments.length > 0) url.searchParams.set("adj", adjustments.join(","));
-    navigator.clipboard.writeText(url.toString()).then(() => {
+    return url.toString();
+  }, [selectedProcedures, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, adjustments]);
+
+  const shareCalculation = useCallback(() => {
+    if (selectedProcedures.length === 0 || !calculation) return;
+    setShareUrl(buildShareUrl());
+  }, [selectedProcedures, calculation, buildShareUrl]);
+
+  const copyShareLink = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedProcedures, calculation, allCbhpmCodes, selectedCodes, auxiliariesCount, requiresAnesthesia, accessRoute, adjustments]);
+  }, [shareUrl]);
 
   const toggleCode = (code: string) => {
     setSelectedCodes((prev) => {
@@ -524,11 +540,12 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       <div className="relative z-10 px-5 pt-5">
         <nav className="nav-bar mx-auto flex max-w-[1080px] items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 no-underline">
-            <div
-              className="brand-mark flex h-9 w-9 items-center justify-center rounded-full"
-              style={{ background: "linear-gradient(135deg, hsl(186,72%,28%), hsl(186,72%,22%))", boxShadow: "0 2px 8px hsla(186,72%,28%,0.35)" }}
-            >
-              <Activity aria-hidden="true" className="text-white" size={18} />
+            <div className="brand-mark h-9 w-9 shrink-0">
+              {/* Theme-aware: navy mark on the light tile, white mark in dark mode. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/afere-symbol.svg" alt="" aria-hidden="true" width={24} height={23} className="block dark:hidden" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/afere-symbol-light.svg" alt="" aria-hidden="true" width={24} height={23} className="hidden dark:block" />
             </div>
             <div>
               <span className="block text-base font-extrabold tracking-tight text-slate-950 dark:text-slate-50">Afere</span>
@@ -562,7 +579,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
               type="button"
             >
               <Sun aria-hidden="true" size={13} className="absolute left-2 text-amber-500 transition-opacity dark:opacity-35" />
-              <Moon aria-hidden="true" size={13} className="absolute right-2 text-slate-500 opacity-45 transition-opacity dark:text-cyan-200 dark:opacity-100" />
+              <Moon aria-hidden="true" size={13} className="absolute right-2 text-slate-500 opacity-45 transition-opacity dark:text-[#94A3B8] dark:opacity-100" />
               <span aria-hidden="true" className={`theme-switch-thumb absolute top-1 h-6 w-6 rounded-full transition-transform duration-200 ${isDark ? "translate-x-7" : "translate-x-1"}`} />
             </button>
           </div>
@@ -576,7 +593,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         </h1>
         <p className="m-0 text-sm font-medium text-slate-500 dark:text-slate-400">
           {loadedCompositionId
-            ? <>Editando composição: <span className="font-semibold text-primary dark:text-teal-300">{loadedCompositionName}</span></>
+            ? <>Editando composição: <span className="font-semibold text-primary dark:text-[#5F84B3]">{loadedCompositionName}</span></>
             : "Selecione o procedimento SBN · Monte a composição · Valorize em tempo real"}
         </p>
       </div>
@@ -585,7 +602,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
       <div className="main-grid relative z-[1] mx-auto grid max-w-[1080px] gap-7 px-5 pb-12">
 
         {/* ── Left panel ──────────────────────────────────────────────────── */}
-        <div className="card-plush rounded-3xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 p-8">
+        <div className="card-plush rounded-3xl border border-slate-200/80 dark:border-slate-700 dark:bg-slate-900 p-8">
           <div className="mb-6 flex items-center gap-2">
             <Stethoscope aria-hidden="true" className="text-primary" size={18} />
             <h2 className="m-0 text-[15px] font-bold text-slate-950 dark:text-slate-50">Buscar Procedimento SBN</h2>
@@ -626,7 +643,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                       className={cn(
                         "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
                         checked
-                          ? "border-primary/25 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                          ? "border-primary/25 bg-[#EAF0F6] dark:border-[#5F84B3]/20 dark:bg-[#182235]/50"
                           : "border-slate-100 dark:border-slate-800 opacity-60",
                       )}
                     >
@@ -635,9 +652,9 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                         onClick={() => toggleCode(c.code)}
                         aria-pressed={checked}
                         className={cn(
-                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-all duration-200",
                           checked
-                            ? "border-primary bg-primary text-white"
+                            ? "border-primary bg-primary text-white shadow-[0_0_7px_1px_rgba(53,54,80,0.5)] dark:border-[#5F84B3] dark:bg-[#355C8A] dark:shadow-[0_0_9px_1px_rgba(95,132,179,0.7)]"
                             : "border-slate-300 dark:border-slate-600",
                         )}
                       >
@@ -652,7 +669,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                           <span className={cn(
                             "rounded-lg border px-2 py-0.5 text-[11px] font-semibold",
                             checked
-                              ? "border-primary/30 text-primary dark:border-teal-300/30 dark:text-teal-300"
+                              ? "border-primary/30 text-primary dark:border-[#5F84B3]/30 dark:text-[#5F84B3]"
                               : "border-slate-200 dark:border-slate-700 text-slate-400",
                           )}>
                             {c.porte}
@@ -697,14 +714,14 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                         className={cn(
                           "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
                           isSelected
-                            ? "border-primary/30 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                            ? "border-primary/30 bg-[#EAF0F6] dark:border-[#5F84B3]/20 dark:bg-[#182235]/50"
                             : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
                         )}
                       >
                         <span className={cn(
                           "mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                           isSelected
-                            ? "border-primary bg-primary dark:border-teal-400 dark:bg-teal-400"
+                            ? "border-primary bg-primary dark:border-[#5F84B3] dark:bg-[#5F84B3]"
                             : "border-slate-300 dark:border-slate-600",
                         )}>
                           {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -712,7 +729,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                         <div>
                           <div className={cn(
                             "text-[13px] font-semibold",
-                            isSelected ? "text-primary dark:text-teal-300" : "text-slate-700 dark:text-slate-300",
+                            isSelected ? "text-primary dark:text-[#5F84B3]" : "text-slate-700 dark:text-slate-300",
                           )}>
                             {route === "same" ? "Mesma via de acesso" : "Vias de acesso diferentes"}
                           </div>
@@ -736,7 +753,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                       Número de Auxiliares
                     </label>
                     {auxIsLocked && (
-                      <span className="rounded-md bg-primary/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-primary dark:bg-teal-300/10 dark:text-teal-300">
+                      <span className="rounded-md bg-primary/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-primary dark:bg-[#5F84B3]/10 dark:text-[#5F84B3]">
                         Definido pelo CBHPM
                       </span>
                     )}
@@ -753,10 +770,10 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                           "h-9 w-9 rounded-xl border text-sm font-semibold transition-colors",
                           auxIsLocked
                             ? auxiliariesCount === n
-                              ? "border-primary bg-primary text-white dark:border-teal-400 dark:bg-teal-600 cursor-default"
+                              ? "border-primary bg-primary text-white dark:border-[#5F84B3] dark:bg-[#355C8A] cursor-default"
                               : "border-slate-100 dark:border-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed"
                             : auxiliariesCount === n
-                              ? "border-primary bg-primary text-white dark:border-teal-400 dark:bg-teal-600"
+                              ? "border-primary bg-primary text-white dark:border-[#5F84B3] dark:bg-[#355C8A]"
                               : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary/40",
                         )}
                       >
@@ -837,19 +854,19 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                     className={cn(
                       "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
                       activePediatric === null
-                        ? "border-primary/30 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                        ? "border-primary/30 bg-[#EAF0F6] dark:border-[#5F84B3]/20 dark:bg-[#182235]/50"
                         : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
                     )}
                   >
                     <span className={cn(
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                       activePediatric === null
-                        ? "border-primary bg-primary dark:border-teal-400 dark:bg-teal-400"
+                        ? "border-primary bg-primary dark:border-[#5F84B3] dark:bg-[#5F84B3]"
                         : "border-slate-300 dark:border-slate-600",
                     )}>
                       {activePediatric === null && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                     </span>
-                    <span className={cn("text-[13px] font-medium", activePediatric === null ? "text-primary dark:text-teal-300" : "text-slate-600 dark:text-slate-400")}>
+                    <span className={cn("text-[13px] font-medium", activePediatric === null ? "text-primary dark:text-[#5F84B3]" : "text-slate-600 dark:text-slate-400")}>
                       Não pediátrico
                     </span>
                   </button>
@@ -864,23 +881,23 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                         className={cn(
                           "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
                           isActive
-                            ? "border-primary/30 bg-teal-50/60 dark:border-teal-300/20 dark:bg-teal-900/15"
+                            ? "border-primary/30 bg-[#EAF0F6] dark:border-[#5F84B3]/20 dark:bg-[#182235]/50"
                             : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
                         )}
                       >
                         <span className={cn(
                           "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                           isActive
-                            ? "border-primary bg-primary dark:border-teal-400 dark:bg-teal-400"
+                            ? "border-primary bg-primary dark:border-[#5F84B3] dark:bg-[#5F84B3]"
                             : "border-slate-300 dark:border-slate-600",
                         )}>
                           {isActive && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                         </span>
                         <div>
-                          <span className={cn("text-[13px] font-medium", isActive ? "text-primary dark:text-teal-300" : "text-slate-600 dark:text-slate-400")}>
+                          <span className={cn("text-[13px] font-medium", isActive ? "text-primary dark:text-[#5F84B3]" : "text-slate-600 dark:text-slate-400")}>
                             {adj.label}
                           </span>
-                          <span className={cn("ml-2 text-[12px] font-semibold", isActive ? "text-primary dark:text-teal-300" : "text-slate-400")}>
+                          <span className={cn("ml-2 text-[12px] font-semibold", isActive ? "text-primary dark:text-[#5F84B3]" : "text-slate-400")}>
                             +{adj.pct}%
                           </span>
                         </div>
@@ -903,7 +920,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
         </div>
 
         {/* ── Right panel ─────────────────────────────────────────────────── */}
-        <div className="results-card relative overflow-hidden rounded-3xl border border-primary/15 dark:border-teal-300/20 p-7">
+        <div className="results-card relative overflow-hidden rounded-3xl border border-primary/15 dark:border-[#5F84B3]/20 p-7">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Calculator aria-hidden="true" className="text-primary" size={18} />
@@ -924,14 +941,14 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                     <div key={b.cbhpm_code} className={cn(
                       "flex items-end justify-between gap-1 rounded-xl px-3 py-2",
                       b.is_principal
-                        ? "border border-primary/20 bg-teal-50/50 dark:border-teal-300/15 dark:bg-teal-900/10"
+                        ? "border border-primary/20 bg-[#EAF0F6] dark:border-[#5F84B3]/15 dark:bg-[#182235]/40"
                         : "",
                     )}>
                       <div className="min-w-0">
                         <dt className="flex items-center gap-1.5">
                           <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{b.cbhpm_code}</span>
                           {b.is_principal && (
-                            <span className="rounded-md bg-primary/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-primary dark:bg-teal-300/10 dark:text-teal-300">
+                            <span className="rounded-md bg-primary/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-primary dark:bg-[#5F84B3]/10 dark:text-[#5F84B3]">
                               principal
                             </span>
                           )}
@@ -939,7 +956,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                         <dd className="truncate text-[12px] text-slate-500 dark:text-slate-400">{b.description}</dd>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="text-[11px] font-semibold text-primary dark:text-teal-400">{b.porte}</span>
+                        <span className="text-[11px] font-semibold text-primary dark:text-[#5F84B3]">{b.porte}</span>
                         <span className="font-grotesk text-sm font-semibold text-slate-950 dark:text-slate-50">
                           {money.format(b.base_value)}
                         </span>
@@ -1044,7 +1061,7 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
               {/* ── Valor Final ─────────────────────────────────────────── */}
               <div
                 className="rounded-2xl p-4 text-white"
-                style={{ background: "linear-gradient(135deg, hsl(186,72%,28%), hsl(186,68%,22%))", boxShadow: "0 4px 20px hsla(186,72%,28%,0.35)" }}
+                style={{ background: "linear-gradient(135deg, hsl(214,52%,24%), hsl(214,52%,18%))", boxShadow: "0 4px 20px hsla(214,52%,24%,0.35)" }}
               >
                 <div className="mb-2 grid grid-cols-2 gap-1 text-[11px] opacity-75">
                   <span>Cirurgião</span>
@@ -1085,10 +1102,10 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                   <button
                     id="share-calculation-btn"
                     onClick={shareCalculation}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 px-4 py-3 text-sm font-semibold text-primary transition-all hover:bg-primary/5 active:scale-[0.98] dark:border-teal-300/20 dark:text-teal-300"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 px-4 py-3 text-sm font-semibold text-primary transition-all hover:bg-primary/5 active:scale-[0.98] dark:border-[#5F84B3]/20 dark:text-[#5F84B3]"
                     type="button"
                   >
-                    {copied ? <><Check size={16} /> Link copiado!</> : <><Share2 size={16} /> Compartilhar cálculo</>}
+                    <Share2 size={16} /> Compartilhar cálculo
                   </button>
 
                   {/* ── Composition save / update area ── */}
@@ -1157,13 +1174,13 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
                             onKeyDown={(e) => { if (e.key === "Enter") handleSaveComposition(); if (e.key === "Escape") setShowSaveForm(false); }}
                             placeholder="Ex: Craniotomia + DVP"
                             maxLength={120}
-                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-primary dark:focus:border-teal-400 focus:outline-none transition-colors"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-primary dark:focus:border-[#5F84B3] focus:outline-none transition-colors"
                           />
                           <div className="flex gap-2">
                             <button
                               onClick={handleSaveComposition}
                               disabled={savingComposition || !compositionName.trim()}
-                              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/10 active:scale-[0.98] disabled:opacity-50 dark:border-teal-300/20 dark:text-teal-300 dark:hover:bg-teal-300/10"
+                              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/10 active:scale-[0.98] disabled:opacity-50 dark:border-[#5F84B3]/20 dark:text-[#5F84B3] dark:hover:bg-[#5F84B3]/10"
                               type="button"
                             >
                               {savingComposition
@@ -1226,6 +1243,77 @@ function ProcedureContent({ initialQuery, initialSbnId, initialRoute, initialCom
           2026 &nbsp;·&nbsp; <span className="font-bold text-slate-500">LabF5</span> &nbsp;·&nbsp; Todos os direitos reservados
         </p>
       </footer>
+
+      {/* ── Share modal: link + QR code ─────────────────────────────────────── */}
+      {shareUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-modal-title"
+          onKeyDown={(e) => { if (e.key === "Escape") setShareUrl(null); }}
+        >
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setShareUrl(null)}
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+          />
+
+          {/* Card */}
+          <div className="card-plush relative w-full max-w-sm rounded-3xl border border-slate-200/80 bg-white p-7 dark:border-slate-700 dark:bg-slate-900">
+            <button
+              type="button"
+              aria-label="Fechar"
+              onClick={() => setShareUrl(null)}
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="mb-5 flex items-center gap-2">
+              <Share2 size={16} className="text-primary dark:text-[#5F84B3]" aria-hidden="true" />
+              <h2 id="share-modal-title" className="m-0 text-[15px] font-bold text-slate-950 dark:text-slate-50">
+                Compartilhar relatório
+              </h2>
+            </div>
+
+            {/* Copy link button */}
+            <button
+              type="button"
+              onClick={copyShareLink}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary transition-all hover:bg-primary/10 active:scale-[0.98] dark:border-[#5F84B3]/20 dark:text-[#5F84B3] dark:hover:bg-[#5F84B3]/10"
+            >
+              {copied ? <><Check size={16} /> Link copiado!</> : <><Copy size={16} /> Copiar link</>}
+            </button>
+
+            {/* URL display */}
+            <p className="mt-3 break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+              {shareUrl}
+            </p>
+
+            {/* QR code */}
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700">
+                <QRCodeSVG
+                  value={shareUrl}
+                  size={148}
+                  level="M"
+                  marginSize={0}
+                  bgColor="#FFFFFF"
+                  fgColor="#0F172A"
+                  title="QR Code do relatório compartilhado"
+                  className="h-[148px] w-[148px]"
+                />
+              </div>
+              <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                <Smartphone size={12} aria-hidden="true" /> Escaneie para abrir no celular
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -1237,7 +1325,7 @@ function ResultRow({ label, value, note, strong }: { label: string; value: numbe
     <div className="flex items-end justify-between gap-1">
       <dt className={cn("shrink-0 text-[13px]", strong ? "font-semibold text-slate-700 dark:text-slate-300" : "font-medium text-slate-500 dark:text-slate-400")}>
         {label}
-        {note && <span className="ml-1.5 text-[11px] font-semibold text-primary/70 dark:text-teal-400/70">{note}</span>}
+        {note && <span className="ml-1.5 text-[11px] font-semibold text-primary/70 dark:text-[#5F84B3]/70">{note}</span>}
       </dt>
       <div className="leader" />
       <dd className={cn("font-grotesk shrink-0 text-sm font-semibold", strong ? "text-slate-950 dark:text-slate-50" : "text-slate-800 dark:text-slate-100")}>
