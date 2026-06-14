@@ -8,12 +8,13 @@ The entire system is built under **Spec-Driven Design (SDD)**: the OpenAPI contr
 
 ## Features
 
-- **Privacy-first landing screen** — a minimalist search interface that exposes no financial data, safe to open in front of patients or staff
+- **Physician workspace** — authenticated home at `/` showing recent compositions, quick-access tools, and release notes; unauthenticated visitors see a minimal branded entry screen
+- **Novo cálculo** — search-first calculation entry at `/novo-calculo`; privacy-first minimalist UI with no financial data visible before a procedure is selected
 - **Real-time composition** — select an SBN procedure, pick which CBHPM codes were performed, toggle the access route and anesthesia; fees recalculate in under 150 ms
 - **Multi-procedure support** — compose multiple SBN procedures in one bill; CBHPM 4.1/4.2 discount rules applied automatically
 - **CBHPM-mandated auxiliaries** — auxiliary count is locked to the value specified in the CBHPM 2022 manual when the selected codes define it; free selection otherwise
 - **Save compositions** — name and persist a procedural template (SBN procedure + codes + access route + aux + anesthesia) with no financial data; fees always recalculate from the current CBHPM table on load
-- **Manage compositions** — list, reload, edit, and delete saved compositions from the home page; load one back into the procedure page via `?composition={id}`
+- **Manage compositions** — list, reload, edit, and delete saved compositions; accessible from the workspace home and the "Minhas composições" tab on `/novo-calculo`
 - **Shareable report** — copy a pre-filled URL that reconstructs the exact calculation state for any recipient
 
 ---
